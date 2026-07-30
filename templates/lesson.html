@@ -23,6 +23,20 @@
 
 <main class="lesson-container">
 
+    <!-- ===================================================== -->
+    <!-- TTS FALLBACK BANNER - shows if backup voice was used  -->
+    <!-- ===================================================== -->
+    {% if tts_fallback_used %}
+    <div class="tts-fallback-banner">
+        <span class="banner-icon">🔊</span>
+        <div class="banner-content">
+            <strong>Voice Notice:</strong>
+            {{ tts_fallback_count }} scene(s) in this lesson used a backup voice
+            because the primary voice service was temporarily unavailable.
+            <span class="banner-subtle">(Audio quality may sound slightly different)</span>
+        </div>
+    </div>
+    {% endif %}
 
     <!-- ===== LESSON HERO ===== -->
 
