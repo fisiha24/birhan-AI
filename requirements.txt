@@ -6,3 +6,4 @@ moviepy==1.0.3
 Pillow==10.4.0
 numpy==1.26.4
 gunicorn==22.0.0
+gTTS==2.5.4
