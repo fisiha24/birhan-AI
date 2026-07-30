@@ -36,6 +36,19 @@ CHANGES IN THIS VERSION
    it is kept correct for local development and any environment
    that runs `python app.py` directly.
 
+3. TTS ENGINE FALLBACK VISIBILITY: services/text_to_speech.py now
+   automatically falls back to gTTS for any scene where edge-tts
+   fails (e.g. the Microsoft backend returning a 403, or a
+   cloud-host IP being blocked), and reports which engine
+   ("edge-tts" or "gtts") actually produced each scene's audio.
+   This version tracks that per lesson: every fallback is logged
+   via app.logger.warning() (so it shows up in Render's logs
+   immediately instead of only being noticeable from a changed
+   voice or missing board-sync timing), and a simple
+   `tts_fallback_count` / `tts_fallback_used` pair is passed to
+   lesson.html so the template can optionally show a small notice
+   when part of a lesson had to use the fallback voice.
+
 Everything else - lesson generation, scene splitting, tiered
 assessment scene construction, audio caching, video assembly,
 lesson saving/rendering - is unchanged from the previous version.
@@ -720,11 +733,29 @@ def generate_lesson_route():
         # combination, so each unique line is only synthesized
         # once per lesson; every repeat is a plain file copy
         # instead of a full TTS run. The cache also stores each
-        # line's real per-word timing ("word_boundaries"), so a
-        # repeated line reuses its correct timing too.
+        # line's real per-word timing ("word_boundaries") and
+        # which TTS engine produced it, so a repeated line
+        # reuses its correct timing and fallback status too.
         # ====================================================
 
         audio_cache = {}
+
+
+        # ====================================================
+        # TTS ENGINE FALLBACK TRACKING
+        #
+        # generate_audio() automatically falls back to gTTS if
+        # edge-tts fails for a scene (e.g. a 403 from
+        # Microsoft's backend, or the host's IP being blocked).
+        # Every time that happens for a NEWLY synthesized line
+        # (not a cache hit - the cache already reflects the
+        # engine that was actually used the first time), it is
+        # logged immediately via app.logger.warning() so it is
+        # visible in Render's logs right away, and counted so
+        # the lesson page can optionally show a small notice.
+        # ====================================================
+
+        tts_fallback_count = 0
 
 
         # ====================================================
@@ -883,11 +914,14 @@ def generate_lesson_route():
             #
             # generate_audio() returns the real per-word timing
             # it captured while synthesizing this scene's
-            # narration. That timing is attached to the scene
-            # itself as "speech_word_boundaries" so
+            # narration, plus which engine ("edge-tts" or
+            # "gtts") actually produced the audio. The timing
+            # is attached to the scene itself as
+            # "speech_word_boundaries" so
             # services/video_generator.py can reveal each word
             # on the board at the exact instant it is actually
-            # spoken.
+            # spoken; the engine is used only for logging/
+            # tracking the fallback here.
             # =================================================
 
             audio_filename = (
@@ -928,9 +962,12 @@ def generate_lesson_route():
                 # Same text + language + rate + pause has
                 # already been synthesized this lesson - reuse
                 # that file (and its timing data) instead of
-                # running TTS again.
+                # running TTS again. Already counted toward
+                # tts_fallback_count the first time, if it used
+                # the fallback engine, so it is not counted
+                # again here.
 
-                cached_audio_path, cached_word_boundaries = cached_entry
+                cached_audio_path, cached_word_boundaries, _cached_engine = cached_entry
 
                 shutil.copyfile(
                     cached_audio_path,
@@ -965,9 +1002,36 @@ def generate_lesson_route():
 
                 )
 
+                engine_used = (
+
+                    audio_result.get("engine")
+
+                    if isinstance(audio_result, dict)
+
+                    else None
+
+                )
+
+                if engine_used == "gtts":
+
+                    tts_fallback_count += 1
+
+                    app.logger.warning(
+
+                        "Scene %s fell back to gTTS "
+
+                        "(edge-tts unavailable) - lesson %s",
+
+                        scene_number,
+
+                        lesson_uuid,
+
+                    )
+
                 audio_cache[cache_key] = (
                     audio_path,
                     word_boundaries,
+                    engine_used,
                 )
 
 
@@ -1160,7 +1224,28 @@ def generate_lesson_route():
 
 
         # ====================================================
-        # 13. SHOW LESSON
+        # 13. LOG A LESSON-LEVEL SUMMARY IF ANY SCENE FELL
+        #     BACK TO gTTS, SO IT'S EASY TO SPOT IN RENDER'S
+        #     LOGS WITHOUT SCROLLING THROUGH PER-SCENE LINES.
+        # ====================================================
+
+        if tts_fallback_count > 0:
+
+            app.logger.warning(
+
+                "Lesson %s finished with %s scene(s) using "
+
+                "the gTTS fallback voice instead of edge-tts.",
+
+                lesson_uuid,
+
+                tts_fallback_count,
+
+            )
+
+
+        # ====================================================
+        # 14. SHOW LESSON
         # ====================================================
 
         return render_template(
@@ -1178,6 +1263,10 @@ def generate_lesson_route():
             scene_images=scene_image_names,
 
             scene_audios=scene_audio_names,
+
+            tts_fallback_count=tts_fallback_count,
+
+            tts_fallback_used=tts_fallback_count > 0,
 
         )
 
