@@ -2,8 +2,9 @@
 Birhan AI
 Text-to-Speech Service
 
-NEURAL VOICE VERSION (Microsoft Edge neural voices via
-the `edge-tts` package)
+AZURE SPEECH SDK VERSION
+(official Microsoft Azure Cognitive Services Speech SDK -
+replaces the unofficial `edge-tts` client)
 
 Each scene receives its own audio file.
 
@@ -11,63 +12,72 @@ Each scene receives its own audio file.
 WHY THIS VERSION EXISTS
 ============================================================
 
-The previous version used the Windows SAPI5 desktop voices
-(via PowerShell). SAPI5 voices sound robotic, and the old
-per-sentence rate/volume switching (meant to add "teacher
-energy") caused audible jumps in tone between sentences,
-because SAPI5 resets its speaking rate at the start of every
-separate $synth.Speak() call.
+The previous version used `edge-tts`, an unofficial Python
+wrapper around the internal endpoint that powers Microsoft
+Edge's "Read Aloud" browser feature
+(speech.platform.bing.com). That endpoint is not a public
+API - it is reverse-engineered from the browser feature - and
+Microsoft has been increasingly blocking requests that come
+from datacenter / cloud IP ranges (Render, AWS, Heroku, GCP,
+etc.) rather than a real end-user's machine. That is what was
+causing the
 
-This version instead uses a single Microsoft Edge neural
-voice (natural, human-sounding) per language, spoken in ONE
-continuous synthesis call per scene:
+    403 ... TrustedClientToken ...
 
-1. Natural voice: neural TTS instead of SAPI5.
-2. Consistent tone: one voice, one rate, for the entire
-   scene - no per-sentence style switching.
-3. Clear, slightly slowed pacing so students can follow.
-4. No mid-sentence stutters/glitches: because the whole
-   scene's narration is sent to the synthesizer in a single
-   call, there are no seams between separately-synthesized
-   sentence clips (which is what caused audible "stutter" in
-   the old version).
-5. Duplicate consecutive sentences are still removed before
-   synthesis (e.g. an accidentally repeated intro line).
-6. Real silent pauses (e.g. time for students to applaud)
-   are still supported via `pause_seconds` and/or a
-   "[PAUSE:n]" marker inside the text, appended with ffmpeg
-   after the spoken audio.
+error once deployed to Render, even though it may have worked
+fine on a local machine.
+
+This version instead uses the official, supported Azure
+Cognitive Services Speech SDK. It requires a real Azure
+Speech resource (key + region), but it is a stable, documented
+API that is meant to be called from a server, and will not be
+silently blocked.
 
 ============================================================
-NOTE FOR THIS UPDATE
+WHAT STAYED THE SAME
 ============================================================
 
-This file is unchanged in this update. It already captures
-the real per-word timing of the synthesized narration (via
-edge-tts's streaming WordBoundary events) and returns it as
-`word_boundaries` from generate_audio() - that is exactly the
-data services/video_generator.py now uses to align every word
-on the board to the instant it is actually spoken. See
-services/video_generator.py and app.py for the sync changes.
+1. One consistent neural voice per language, spoken in a
+   SINGLE synthesis call per scene - no per-sentence tone
+   switching.
+2. Consecutive duplicate sentences are still de-duplicated
+   before synthesis.
+3. Real silent pauses (`pause_seconds` and/or a "[PAUSE:n]"
+   marker inside the text) are still supported, appended
+   with ffmpeg after the spoken audio.
+4. `generate_audio()` still returns real per-word timing as
+   `word_boundaries`, which services/video_generator.py uses
+   to align every board word to the instant it is actually
+   spoken - now sourced from the Azure SDK's
+   `synthesis_word_boundary` event instead of edge-tts's
+   WordBoundary chunks.
 
 ============================================================
 REQUIREMENTS
 ============================================================
 
-pip install edge-tts --break-system-packages
+pip install azure-cognitiveservices-speech --break-system-packages
 
 `ffmpeg` must be available on PATH (already required by the
 rest of the app for video/audio work).
+
+============================================================
+ENVIRONMENT VARIABLES (set these in Render's dashboard, and
+locally in a .env file that is NOT committed to git)
+============================================================
+
+AZURE_SPEECH_KEY     - your Azure Speech resource key
+AZURE_SPEECH_REGION  - e.g. "eastus", "westeurope", etc.
 """
 
-import asyncio
+import os
 import re
 
 from pathlib import Path
 
 import subprocess
 
-import edge_tts
+import azure.cognitiveservices.speech as speechsdk
 
 
 # ============================================================
@@ -113,7 +123,9 @@ def clean_text(text):
 #
 # One consistent, natural-sounding neural voice per language -
 # used for the ENTIRE lesson, so the teacher's voice never
-# suddenly changes tone or character partway through.
+# suddenly changes tone or character partway through. Both of
+# these voice names also exist as official Azure neural
+# voices, so no other change was needed here.
 # ============================================================
 
 LANGUAGE_VOICE_MAP = {
@@ -124,7 +136,17 @@ LANGUAGE_VOICE_MAP = {
 
 }
 
+LANGUAGE_LOCALE_MAP = {
+
+    "english": "en-US",
+
+    "amharic": "am-ET",
+
+}
+
 DEFAULT_VOICE = "en-US-GuyNeural"
+
+DEFAULT_LOCALE = "en-US"
 
 
 def _select_voice(language):
@@ -137,21 +159,26 @@ def _select_voice(language):
     )
 
 
+def _select_locale(language):
+
+    key = str(language or "").strip().lower()
+
+    return LANGUAGE_LOCALE_MAP.get(
+        key,
+        DEFAULT_LOCALE,
+    )
+
+
 # ============================================================
 # RATE MAPPING
 #
-# edge-tts accepts the same "+n%"/"-n%" style rate strings
-# the rest of this app already uses (e.g. "-25%"), so the
-# value is passed straight through. A negative rate keeps
-# speech clear, slow, and easy for students to follow, and -
-# unlike the old SAPI5 version - it is applied ONCE for the
-# whole scene rather than jumping around per sentence.
+# The Azure SDK takes speaking rate as an SSML <prosody
+# rate="..."> attribute, which accepts the same "+n%"/"-n%"
+# style strings the rest of this app already uses - so the
+# value is passed straight through, same as before.
 #
-# PACING FIX: the default was "-10%", which still read as
-# fairly quick for a classroom lesson. It is now "-25%" so
-# the teacher speaks at a clearly slower, more deliberate
-# pace by default. Callers (see app.py) also pass this same
-# slower rate explicitly.
+# DEFAULT_RATE stays "-25%" so the teacher speaks at a
+# clearly slower, more deliberate classroom pace by default.
 # ============================================================
 
 DEFAULT_RATE = "-25%"
@@ -273,9 +300,9 @@ def split_into_sentences(text):
 # ============================================================
 # BUILD A SILENT-PAUSE CLIP
 #
-# Generated at 24000 Hz mono to match edge-tts's own speech
-# output sample rate, so the two segments join cleanly with
-# no audible seam when concatenated.
+# Generated at 24000 Hz mono to match the Azure SDK's output
+# sample rate configured below, so the two segments join
+# cleanly with no audible seam when concatenated.
 # ============================================================
 
 def _build_silence_command(duration_seconds, output_path):
@@ -303,108 +330,155 @@ def _build_silence_command(duration_seconds, output_path):
 
 
 # ============================================================
-# RUN EDGE-TTS SYNTHESIS - PLAIN (NO TIMING DATA)
+# SSML BUILDING
 #
-# Kept as the fallback synthesis path used only if the
-# streaming/WordBoundary path below fails for some reason
-# (e.g. an older edge-tts version). This never returns timing
-# data, so any scene synthesized this way will fall back to
-# the video generator's evenly-spread board-writing pace.
+# The Azure SDK is driven via SSML rather than plain text +
+# separate voice/rate arguments, so the voice name, locale,
+# and prosody rate are all embedded directly in the markup
+# sent to the synthesizer.
 # ============================================================
 
-async def _synthesize(text, voice, rate, output_path):
+def _escape_ssml_text(text):
 
-    communicate = edge_tts.Communicate(
-        text=text,
-        voice=voice,
-        rate=rate,
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&apos;")
     )
 
-    await communicate.save(
-        str(output_path)
-    )
 
+def _build_ssml(text, voice, locale, rate):
 
-def _run_synthesis(text, voice, rate, output_path):
+    escaped = _escape_ssml_text(text)
 
-    asyncio.run(
-        _synthesize(
-            text,
-            voice,
-            rate,
-            output_path,
-        )
+    return (
+        f'<speak version="1.0" '
+        f'xmlns="http://www.w3.org/2001/10/synthesis" '
+        f'xml:lang="{locale}">'
+        f'<voice name="{voice}">'
+        f'<prosody rate="{rate}">{escaped}</prosody>'
+        f"</voice>"
+        f"</speak>"
     )
 
 
 # ============================================================
-# RUN EDGE-TTS SYNTHESIS - WITH REAL WORD TIMING
+# AZURE SPEECH CONFIG
 #
-# Uses edge-tts's streaming API so we can capture
-# "WordBoundary" events as they are produced - these carry the
-# REAL offset/duration (in 100-nanosecond units) of every word
-# inside the synthesized audio. That gives us the actual
-# pacing of the recorded voice, including any natural
-# micro-pauses the voice engine adds, instead of an assumed
-# constant speaking rate. services/video_generator.py uses
-# this to align every board word to the instant it is spoken.
+# Reads credentials from environment variables ONLY - never
+# hardcode a key here. Set AZURE_SPEECH_KEY and
+# AZURE_SPEECH_REGION in Render's dashboard (Environment tab)
+# and in a local .env file that is NOT committed to git.
 # ============================================================
 
-async def _synthesize_with_boundaries(text, voice, rate, output_path):
+def _build_speech_config():
 
-    communicate = edge_tts.Communicate(
-        text=text,
-        voice=voice,
-        rate=rate,
-    )
+    speech_key = os.environ.get("AZURE_SPEECH_KEY")
 
-    boundaries = []
+    speech_region = os.environ.get("AZURE_SPEECH_REGION")
 
-    with open(output_path, "wb") as audio_file:
+    if not speech_key or not speech_region:
 
-        async for chunk in communicate.stream():
-
-            chunk_type = chunk.get("type")
-
-            if chunk_type == "audio":
-
-                data = chunk.get("data")
-
-                if data:
-
-                    audio_file.write(data)
-
-            elif chunk_type == "WordBoundary":
-
-                offset_100ns = chunk.get("offset", 0) or 0
-
-                duration_100ns = chunk.get("duration", 0) or 0
-
-                start_seconds = float(offset_100ns) / 10_000_000.0
-
-                duration_seconds = float(duration_100ns) / 10_000_000.0
-
-                boundaries.append(
-                    {
-                        "text": chunk.get("text", ""),
-                        "start": start_seconds,
-                        "end": start_seconds + duration_seconds,
-                    }
-                )
-
-    return boundaries
-
-
-def _run_synthesis_with_boundaries(text, voice, rate, output_path):
-
-    return asyncio.run(
-        _synthesize_with_boundaries(
-            text,
-            voice,
-            rate,
-            output_path,
+        raise RuntimeError(
+            "AZURE_SPEECH_KEY and AZURE_SPEECH_REGION "
+            "environment variables must both be set."
         )
+
+    speech_config = speechsdk.SpeechConfig(
+        subscription=speech_key,
+        region=speech_region,
     )
+
+    speech_config.set_speech_synthesis_output_format(
+        speechsdk.SpeechSynthesisOutputFormat.Audio24Khz96KBitRateMonoMp3
+    )
+
+    return speech_config
+
+
+# ============================================================
+# RUN AZURE SYNTHESIS - WITH REAL WORD TIMING
+#
+# Uses the Azure SDK's `synthesis_word_boundary` event to
+# capture the REAL offset/duration of every word inside the
+# synthesized audio, in the same 100-nanosecond-tick units
+# edge-tts used - so services/video_generator.py needs no
+# changes to how it consumes `word_boundaries`.
+# ============================================================
+
+def _run_synthesis_with_boundaries(text, voice, locale, rate, output_path):
+
+    speech_config = _build_speech_config()
+
+    audio_config = speechsdk.audio.AudioOutputConfig(
+        filename=str(output_path)
+    )
+
+    synthesizer = speechsdk.SpeechSynthesizer(
+        speech_config=speech_config,
+        audio_config=audio_config,
+    )
+
+    word_boundaries = []
+
+    def _on_word_boundary(evt):
+
+        if evt.boundary_type != speechsdk.SpeechSynthesisBoundaryType.Word:
+
+            return
+
+        start_seconds = float(evt.audio_offset) / 10_000_000.0
+
+        duration_seconds = (
+            evt.duration.total_seconds()
+            if evt.duration
+            else 0.0
+        )
+
+        word_boundaries.append(
+            {
+                "text": evt.text,
+                "start": start_seconds,
+                "end": start_seconds + duration_seconds,
+            }
+        )
+
+    synthesizer.synthesis_word_boundary.connect(
+        _on_word_boundary
+    )
+
+    ssml = _build_ssml(
+        text,
+        voice,
+        locale,
+        rate,
+    )
+
+    result = synthesizer.speak_ssml_async(ssml).get()
+
+    if result.reason == speechsdk.ResultReason.Canceled:
+
+        cancellation = result.cancellation_details
+
+        error_detail = (
+            cancellation.error_details
+            if cancellation
+            else "unknown error"
+        )
+
+        raise RuntimeError(
+            f"Azure speech synthesis was canceled: {error_detail}"
+        )
+
+    if result.reason != speechsdk.ResultReason.SynthesizingAudioCompleted:
+
+        raise RuntimeError(
+            f"Azure speech synthesis failed: {result.reason}"
+        )
+
+    return word_boundaries
 
 
 # ============================================================
@@ -437,13 +511,12 @@ def generate_audio(
     `word_boundaries` gives the REAL timing (in seconds,
     relative to the start of the spoken portion of this
     scene's audio - i.e. BEFORE any trailing pause silence)
-    of each word edge-tts actually spoke. This is what lets
-    the video generator sync the board-writing animation to
-    the actual recorded voice, word by word. It will be an
-    empty list if timing data could not be captured (e.g. no
-    speech text, or an edge-tts version without streaming
-    support) - callers must be able to handle that and fall
-    back gracefully.
+    of each word Azure actually spoke. This is what lets the
+    video generator sync the board-writing animation to the
+    actual recorded voice, word by word. It will be an empty
+    list if no boundary events were captured for some reason
+    - callers must be able to handle that and fall back
+    gracefully.
     """
 
     text = clean_text(
@@ -467,8 +540,8 @@ def generate_audio(
     # De-duplicate consecutive repeated sentences, then
     # rejoin into a SINGLE block of text so the whole scene
     # is synthesized in one continuous voice call - this is
-    # what keeps the tone consistent and removes the seams
-    # (stutters) that came from stitching many small clips.
+    # what keeps the tone consistent and removes seams
+    # between separately-synthesized clips.
 
     sentences = split_into_sentences(text)
 
@@ -497,6 +570,8 @@ def generate_audio(
 
     voice = _select_voice(language)
 
+    locale = _select_locale(language)
+
     normalized_rate = _normalize_rate(rate)
 
     have_speech_clip = False
@@ -505,38 +580,18 @@ def generate_audio(
 
     if speech_text:
 
-        try:
-
-            word_boundaries = _run_synthesis_with_boundaries(
-                speech_text,
-                voice,
-                normalized_rate,
-                speech_mp3_path,
-            )
-
-        except Exception:
-
-            # Fall back to the plain (non-timed) synthesis
-            # path if the installed edge-tts version doesn't
-            # support streaming WordBoundary events. The
-            # scene will still get correct audio - it just
-            # won't have real timing data for board syncing,
-            # and the video generator falls back to its own
-            # evenly-spread pacing for this scene only.
-
-            _run_synthesis(
-                speech_text,
-                voice,
-                normalized_rate,
-                speech_mp3_path,
-            )
-
-            word_boundaries = []
+        word_boundaries = _run_synthesis_with_boundaries(
+            speech_text,
+            voice,
+            locale,
+            normalized_rate,
+            speech_mp3_path,
+        )
 
         if not speech_mp3_path.exists():
 
             raise RuntimeError(
-                "Neural text-to-speech did not produce an "
+                "Azure text-to-speech did not produce an "
                 "audio file."
             )
 
