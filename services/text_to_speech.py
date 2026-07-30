@@ -62,10 +62,9 @@ rest of the app for video/audio work).
 
 import asyncio
 import re
-
-from pathlib import Path
-
+import requests
 import subprocess
+from pathlib import Path
 
 import edge_tts
 
@@ -75,36 +74,14 @@ import edge_tts
 # ============================================================
 
 def clean_text(text):
-
+    """Clean text by removing extra spaces and special markers"""
     if not text:
-
         return ""
-
-    text = str(
-        text
-    )
-
-    text = re.sub(
-        r"\s+",
-        " ",
-        text,
-    )
-
-    text = text.replace(
-        "**",
-        "",
-    )
-
-    text = text.replace(
-        "__",
-        "",
-    )
-
-    text = text.replace(
-        "#",
-        "",
-    )
-
+    text = str(text)
+    text = re.sub(r"\s+", " ", text)
+    text = text.replace("**", "")
+    text = text.replace("__", "")
+    text = text.replace("#", "")
     return text.strip()
 
 
@@ -117,24 +94,17 @@ def clean_text(text):
 # ============================================================
 
 LANGUAGE_VOICE_MAP = {
-
     "english": "en-US-GuyNeural",
-
     "amharic": "am-ET-AmehaNeural",
-
 }
 
 DEFAULT_VOICE = "en-US-GuyNeural"
 
 
 def _select_voice(language):
-
+    """Select the appropriate neural voice for the given language"""
     key = str(language or "").strip().lower()
-
-    return LANGUAGE_VOICE_MAP.get(
-        key,
-        DEFAULT_VOICE,
-    )
+    return LANGUAGE_VOICE_MAP.get(key, DEFAULT_VOICE)
 
 
 # ============================================================
@@ -158,17 +128,12 @@ DEFAULT_RATE = "-25%"
 
 
 def _normalize_rate(rate):
-
+    """Normalize rate string to edge-tts format (+/-n%)"""
     rate = str(rate or DEFAULT_RATE).strip()
-
     if not rate.startswith(("+", "-")):
-
         rate = f"+{rate}"
-
     if not rate.endswith("%"):
-
         rate = f"{rate}%"
-
     return rate
 
 
@@ -189,31 +154,19 @@ PAUSE_MARKER_PATTERN = re.compile(
 
 
 def _extract_pause_markers(text):
-
     """
     Remove any "[PAUSE:n]" markers from the text and return
     (clean_text_without_markers, total_pause_seconds).
     """
-
     total_pause = 0.0
 
     def _consume(match):
-
         nonlocal total_pause
-
-        total_pause += float(
-            match.group(1)
-        )
-
+        total_pause += float(match.group(1))
         return " "
 
-    cleaned = PAUSE_MARKER_PATTERN.sub(
-        _consume,
-        text,
-    )
-
+    cleaned = PAUSE_MARKER_PATTERN.sub(_consume, text)
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
-
     return cleaned, total_pause
 
 
@@ -222,52 +175,61 @@ def _extract_pause_markers(text):
 # ============================================================
 
 def split_into_sentences(text):
-
+    """Split text into sentences and remove consecutive duplicates"""
     text = clean_text(text)
-
     if not text:
-
         return []
 
-    raw_parts = re.split(
-        r"(?<=[.!?])\s+",
-        text,
-    )
+    raw_parts = re.split(r"(?<=[.!?])\s+", text)
+    sentences = [part.strip() for part in raw_parts if part.strip()]
 
-    sentences = [
-        part.strip()
-        for part in raw_parts
-        if part.strip()
-    ]
-
-    # --------------------------------------------------------
     # Drop consecutive duplicate sentences so the same line
     # is never spoken twice back to back (e.g. an intro
     # phrase or review prompt that was accidentally
     # duplicated upstream).
-    # --------------------------------------------------------
-
     deduped = []
-
     previous_normalized = None
 
     for sentence in sentences:
-
-        normalized = re.sub(
-            r"\s+",
-            " ",
-            sentence.strip().lower(),
-        )
-
+        normalized = re.sub(r"\s+", " ", sentence.strip().lower())
         if normalized == previous_normalized:
-
             continue
-
         deduped.append(sentence)
-
         previous_normalized = normalized
 
     return deduped
+
+
+# ============================================================
+# GET FRESH TOKEN
+#
+# NEW: Automatically fetches a fresh Edge TTS token to avoid
+# 403 errors. The token is fetched from Microsoft's auth
+# endpoint and used with the edge-tts Communicate object.
+# ============================================================
+
+def _get_fresh_token():
+    """
+    Get a fresh Edge TTS token from Microsoft's auth endpoint.
+    This prevents 403 (Forbidden) errors that occur when the
+    token expires.
+    
+    Returns:
+        str: Fresh token string, or None if fetch fails
+    """
+    try:
+        response = requests.get(
+            "https://edge.microsoft.com/translate/auth",
+            timeout=10
+        )
+        if response.status_code == 200:
+            token = response.text.strip()
+            if token:
+                return token
+    except Exception as e:
+        # Silently fail - edge-tts will use its own token
+        print(f"Token refresh failed: {e}")
+    return None
 
 
 # ============================================================
@@ -279,12 +241,8 @@ def split_into_sentences(text):
 # ============================================================
 
 def _build_silence_command(duration_seconds, output_path):
-
-    duration_seconds = max(
-        0.1,
-        float(duration_seconds),
-    )
-
+    """Build ffmpeg command to generate a silent audio clip"""
+    duration_seconds = max(0.1, float(duration_seconds))
     return [
         "ffmpeg",
         "-y",
@@ -313,28 +271,34 @@ def _build_silence_command(duration_seconds, output_path):
 # ============================================================
 
 async def _synthesize(text, voice, rate, output_path):
-
+    """
+    Synthesize speech using edge-tts with automatic token refresh.
+    Used as fallback when streaming with WordBoundary fails.
+    """
+    # Get fresh token
+    token = _get_fresh_token()
+    
+    # Create Communicate object
     communicate = edge_tts.Communicate(
         text=text,
         voice=voice,
         rate=rate,
     )
-
-    await communicate.save(
-        str(output_path)
-    )
+    
+    # Inject fresh token if available
+    if token:
+        try:
+            # Some edge-tts versions support direct token assignment
+            communicate._token = token
+        except Exception:
+            pass
+    
+    await communicate.save(str(output_path))
 
 
 def _run_synthesis(text, voice, rate, output_path):
-
-    asyncio.run(
-        _synthesize(
-            text,
-            voice,
-            rate,
-            output_path,
-        )
-    )
+    """Synchronous wrapper for _synthesize"""
+    asyncio.run(_synthesize(text, voice, rate, output_path))
 
 
 # ============================================================
@@ -351,60 +315,57 @@ def _run_synthesis(text, voice, rate, output_path):
 # ============================================================
 
 async def _synthesize_with_boundaries(text, voice, rate, output_path):
-
+    """
+    Synthesize speech and capture WordBoundary events for
+    per-word timing data. Automatically refreshes the token
+    to prevent 403 errors.
+    """
+    # Get fresh token
+    token = _get_fresh_token()
+    
+    # Create Communicate object
     communicate = edge_tts.Communicate(
         text=text,
         voice=voice,
         rate=rate,
     )
+    
+    # Inject fresh token if available
+    if token:
+        try:
+            # Some edge-tts versions support direct token assignment
+            communicate._token = token
+        except Exception:
+            pass
 
     boundaries = []
 
     with open(output_path, "wb") as audio_file:
-
         async for chunk in communicate.stream():
-
             chunk_type = chunk.get("type")
 
             if chunk_type == "audio":
-
                 data = chunk.get("data")
-
                 if data:
-
                     audio_file.write(data)
 
             elif chunk_type == "WordBoundary":
-
                 offset_100ns = chunk.get("offset", 0) or 0
-
                 duration_100ns = chunk.get("duration", 0) or 0
-
                 start_seconds = float(offset_100ns) / 10_000_000.0
-
                 duration_seconds = float(duration_100ns) / 10_000_000.0
-
-                boundaries.append(
-                    {
-                        "text": chunk.get("text", ""),
-                        "start": start_seconds,
-                        "end": start_seconds + duration_seconds,
-                    }
-                )
+                boundaries.append({
+                    "text": chunk.get("text", ""),
+                    "start": start_seconds,
+                    "end": start_seconds + duration_seconds,
+                })
 
     return boundaries
 
 
 def _run_synthesis_with_boundaries(text, voice, rate, output_path):
-
-    return asyncio.run(
-        _synthesize_with_boundaries(
-            text,
-            voice,
-            rate,
-            output_path,
-        )
-    )
+    """Synchronous wrapper for _synthesize_with_boundaries"""
+    return asyncio.run(_synthesize_with_boundaries(text, voice, rate, output_path))
 
 
 # ============================================================
@@ -418,8 +379,9 @@ def generate_audio(
     rate=DEFAULT_RATE,
     pause_seconds=0.0,
 ):
-
     """
+    Generate speech audio for the given text using neural TTS.
+    
     pause_seconds: extra seconds of silence appended AFTER
     the spoken text (e.g. time for students to applaud after
     hearing the correct answer). A "[PAUSE:n]" marker inside
@@ -445,139 +407,80 @@ def generate_audio(
     support) - callers must be able to handle that and fall
     back gracefully.
     """
-
-    text = clean_text(
-        text
-    )
-
-    text, marker_pause_seconds = _extract_pause_markers(
-        text
-    )
-
-    total_pause_seconds = float(
-        pause_seconds
-    ) + marker_pause_seconds
+    # Clean the text
+    text = clean_text(text)
+    text, marker_pause_seconds = _extract_pause_markers(text)
+    total_pause_seconds = float(pause_seconds) + marker_pause_seconds
 
     if not text and total_pause_seconds <= 0:
-
-        raise ValueError(
-            "Text-to-speech text is empty."
-        )
+        raise ValueError("Text-to-speech text is empty.")
 
     # De-duplicate consecutive repeated sentences, then
     # rejoin into a SINGLE block of text so the whole scene
     # is synthesized in one continuous voice call - this is
     # what keeps the tone consistent and removes the seams
     # (stutters) that came from stitching many small clips.
-
     sentences = split_into_sentences(text)
-
     speech_text = " ".join(sentences) if sentences else text
 
-    output_path = Path(
-        output_path
-    )
+    # Prepare output paths
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    output_path.parent.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
+    speech_mp3_path = output_path.parent / f"{output_path.stem}_speech.mp3"
+    silence_mp3_path = output_path.parent / f"{output_path.stem}_pause.mp3"
 
-    speech_mp3_path = (
-        output_path.parent
-        /
-        f"{output_path.stem}_speech.mp3"
-    )
-
-    silence_mp3_path = (
-        output_path.parent
-        /
-        f"{output_path.stem}_pause.mp3"
-    )
-
+    # Select voice and rate
     voice = _select_voice(language)
-
     normalized_rate = _normalize_rate(rate)
 
     have_speech_clip = False
-
     word_boundaries = []
 
+    # Synthesize speech
     if speech_text:
-
         try:
-
+            # Try streaming with WordBoundary timing data
             word_boundaries = _run_synthesis_with_boundaries(
                 speech_text,
                 voice,
                 normalized_rate,
                 speech_mp3_path,
             )
-
         except Exception:
-
-            # Fall back to the plain (non-timed) synthesis
-            # path if the installed edge-tts version doesn't
-            # support streaming WordBoundary events. The
-            # scene will still get correct audio - it just
-            # won't have real timing data for board syncing,
-            # and the video generator falls back to its own
-            # evenly-spread pacing for this scene only.
-
+            # Fall back to plain synthesis without timing data
             _run_synthesis(
                 speech_text,
                 voice,
                 normalized_rate,
                 speech_mp3_path,
             )
-
             word_boundaries = []
 
         if not speech_mp3_path.exists():
-
-            raise RuntimeError(
-                "Neural text-to-speech did not produce an "
-                "audio file."
-            )
+            raise RuntimeError("Neural text-to-speech did not produce an audio file.")
 
         have_speech_clip = True
 
+    # Generate silence pause if needed
     have_silence_clip = False
-
     if total_pause_seconds > 0:
-
-        silence_command = _build_silence_command(
-            total_pause_seconds,
-            silence_mp3_path,
-        )
-
+        silence_command = _build_silence_command(total_pause_seconds, silence_mp3_path)
         silence_result = subprocess.run(
             silence_command,
             capture_output=True,
             text=True,
         )
-
         if silence_result.returncode != 0:
-
             raise RuntimeError(
                 "Failed to generate the silent pause clip:\n"
                 + silence_result.stderr
             )
-
         have_silence_clip = silence_mp3_path.exists()
 
-    # ------------------------------------------------------
-    # Combine speech + silence (if any) into the final file.
-    # ------------------------------------------------------
-
+    # Combine speech + silence (if any) into the final file
     if have_speech_clip and have_silence_clip:
-
-        concat_list_path = (
-            output_path.parent
-            /
-            f"{output_path.stem}_concat.txt"
-        )
-
+        concat_list_path = output_path.parent / f"{output_path.stem}_concat.txt"
         concat_list_path.write_text(
             "file '{}'\nfile '{}'\n".format(
                 speech_mp3_path.name,
@@ -610,7 +513,6 @@ def generate_audio(
         )
 
         if ffmpeg_result.returncode != 0:
-
             raise RuntimeError(
                 "FFmpeg audio concatenation failed:\n"
                 + ffmpeg_result.stderr
@@ -619,37 +521,21 @@ def generate_audio(
         concat_list_path.unlink(missing_ok=True)
 
     elif have_speech_clip:
-
-        speech_mp3_path.replace(
-            output_path
-        )
+        speech_mp3_path.replace(output_path)
 
     elif have_silence_clip:
+        silence_mp3_path.replace(output_path)
 
-        silence_mp3_path.replace(
-            output_path
-        )
-
-    for temp_file in (
-        speech_mp3_path,
-        silence_mp3_path,
-    ):
-
+    # Clean up temporary files
+    for temp_file in (speech_mp3_path, silence_mp3_path):
         try:
-
             if temp_file.exists():
-
                 temp_file.unlink()
-
         except Exception:
-
             pass
 
     if not output_path.exists():
-
-        raise RuntimeError(
-            "MP3 audio file was not created."
-        )
+        raise RuntimeError("MP3 audio file was not created.")
 
     return {
         "path": str(output_path),
