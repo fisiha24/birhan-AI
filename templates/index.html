@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        Birhan AI | ብርሃን AI - Digital Teacher
+    </title>
+
+
+    <!-- MAIN CSS -->
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/style.css') }}"
+    >
+
+    <!-- PERCENTAGE OVERLAY STYLES -->
+    <style>
+        #progressOverlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(23, 63, 138, 0.96);
+            z-index: 999999;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: #ffffff;
+            font-family: sans-serif;
+        }
+
+        .percent-text {
+            font-size: 80px;
+            font-weight: 800;
+            color: #f7c948;
+            margin-bottom: 20px;
+        }
+
+        .bar-container {
+            width: 300px;
+            height: 14px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .bar-fill {
+            width: 0%;
+            height: 100%;
+            background: #f7c948;
+            transition: width 0.1s linear;
+        }
+
+        .loading-msg {
+            margin-top: 20px;
+            font-size: 18px;
+            color: #ffffff;
+        }
+    </style>
+
+</head>
+
+
+<body>
+
+    <!-- OVERLAY SCREEN -->
+    <div id="progressOverlay">
+        <div id="percentText" class="percent-text">0%</div>
+        <div class="bar-container">
+            <div id="barFill" class="bar-fill"></div>
+        </div>
+        <p class="loading-msg">ትምህርቱ እየተዘጋጀ ነው... እባክዎ ይታገሱ</p>
+    </div>
+
+
+    <!-- =====================================================
+         MAIN PAGE
+         ===================================================== -->
+
+    <main class="home-page">
+
+
+        <div class="home-wrapper">
+
+
+            <!-- =================================================
+                 HERO SECTION
+                 ================================================= -->
+
+
+            <section class="hero-section">
+
+
+                <div class="brand-badge">
+
+
+                    <span class="brand-icon">
+                        📚
+                    </span>
+
+
+                    <span>
+                        Birhan AI
+                    </span>
+
+
+                    <span class="amharic-badge">
+                        ብርሃን AI
+                    </span>
+
+
+                </div>
+
+
+                <h1>
+
+                    Your Intelligent
+
+                    <span>
+                        Digital Teacher
+                    </span>
+
+                </h1>
+
+
+                <p class="hero-description">
+
+                    Create clear, engaging and student-friendly
+                    lessons with the power of Artificial Intelligence.
+
+                </p>
+
+
+                <p class="amharic-text">
+
+                    በAI ኃይል ግልጽና ተማሪ ተኮር
+                    ትምህርቶችን ይፍጠሩ።
+
+                </p>
+
+
+            </section>
+
+
+            <!-- =================================================
+                 FLASH MESSAGES
+                 ================================================= -->
+
+
+            {% with messages = get_flashed_messages() %}
+
+
+                {% if messages %}
+
+
+                    {% for message in messages %}
+
+
+                        <div class="flash-message">
+
+                            {{ message }}
+
+                        </div>
+
+
+                    {% endfor %}
+
+
+                {% endif %}
+
+
+            {% endwith %}
+
+
+            <!-- =================================================
+                 LESSON FORM
+                 ================================================= -->
+
+
+            <section class="lesson-form-card">
+
+
+                <div class="card-header">
+
+
+                    <div class="header-icon">
+
+                        ✨
+
+                    </div>
+
+
+                    <div>
+
+                        <h2>
+
+                            Create a New Lesson
+
+                        </h2>
+
+
+                        <p>
+
+                            Enter a topic and let Birhan AI
+                            teach it clearly.
+
+                        </p>
+
+                    </div>
+
+
+                </div>
+
+
+                <form
+
+                    id="lessonForm"
+
+                    action="{{ url_for('generate_lesson_route') }}"
+
+                    method="POST"
+
+                >
+
+
+                    <!-- TOPIC -->
+
+
+                    <div class="form-group">
+
+
+                        <label for="topic">
+
+                            Lesson Topic
+
+                        </label>
+
+
+                        <textarea
+
+                            id="topic"
+
+                            name="topic"
+
+                            placeholder="Example: Photosynthesis"
+
+                            rows="3"
+
+                            required
+
+                        ></textarea>
+
+
+                    </div>
+
+
+                    <!-- GRADE AND SUBJECT -->
+
+
+                    <div class="form-row">
+
+
+                        <div class="form-group">
+
+
+                            <label for="grade">
+
+                                Grade
+
+                            </label>
+
+
+                            <select
+
+                                id="grade"
+
+                                name="grade"
+
+                            >
+
+
+                                <option>
+                                    Grade 1
+                                </option>
+
+
+                                <option>
+                                    Grade 2
+                                </option>
+
+
+                                <option>
+                                    Grade 3
+                                </option>
+
+
+                                <option>
+                                    Grade 4
+                                </option>
+
+
+                                <option>
+                                    Grade 5
+                                </option>
+
+
+                                <option>
+                                    Grade 6
+                                </option>
+
+
+                                <option selected>
+                                    Grade 7
+                                </option>
+
+
+                                <option>
+                                    Grade 8
+                                </option>
+
+
+                                <option>
+                                    Grade 9
+                                </option>
+
+
+                                <option>
+                                    Grade 10
+                                </option>
+
+
+                                <option>
+                                    Grade 11
+                                </option>
+
+
+                                <option>
+                                    Grade 12
+                                </option>
+
+
+                            </select>
+
+
+                        </div>
+
+
+                        <div class="form-group">
+
+
+                            <label for="subject">
+
+                                Subject
+
+                            </label>
+
+
+                            <select
+
+                                id="subject"
+
+                                name="subject"
+
+                            >
+
+
+                                <option selected>
+
+                                    General Science
+
+                                </option>
+
+
+                                <option>
+
+                                    Biology
+
+                                </option>
+
+
+                                <option>
+
+                                    Chemistry
+
+                                </option>
+
+
+                                <option>
+
+                                    Physics
+
+                                </option>
+
+
+                                <option>
+
+                                    Mathematics
+
+                                </option>
+
+
+                                <option>
+
+                                    English
+
+                                </option>
+
+
+                                <option>
+
+                                    Social Studies
+
+                                </option>
+
+
+                                <option>
+
+                                    Geography
+
+                                </option>
+
+
+                                <option>
+
+                                    History
+
+                                </option>
+
+
+                            </select>
+
+
+                        </div>
+
+
+                    </div>
+
+
+                    <!-- CHAPTER AND PREVIOUS LESSON -->
+
+
+                    <div class="form-row">
+
+
+                        <div class="form-group">
+
+
+                            <label for="chapter">
+
+                                Chapter
+
+                                <span class="optional">
+
+                                    Optional
+
+                                </span>
+
+
+                            </label>
+
+
+                            <input
+
+                                type="text"
+
+                                id="chapter"
+
+                                name="chapter"
+
+                                placeholder="Example: Chapter 3"
+
+                            >
+
+
+                        </div>
+
+
+                        <div class="form-group">
+
+
+                            <label for="previous_topic">
+
+                                Previous Lesson Topic
+
+                                <span class="optional">
+
+                                    Optional
+
+                                </span>
+
+
+                            </label>
+
+
+                            <input
+
+                                type="text"
+
+                                id="previous_topic"
+
+                                name="previous_topic"
+
+                                placeholder="Example: Introduction to Cells"
+
+                            >
+
+
+                        </div>
+
+
+                    </div>
+
+
+                    <!-- LANGUAGE -->
+
+
+                    <div class="form-group">
+
+
+                        <label for="language">
+
+                            Teaching Language
+
+                        </label>
+
+
+                        <select
+
+                            id="language"
+
+                            name="language"
+
+                        >
+
+
+                            <option selected>
+
+                                English
+
+                            </option>
+
+
+                            <option>
+
+                                Amharic
+
+                            </option>
+
+
+                        </select>
+
+
+                    </div>
+
+
+                    <!-- OPTIONAL SOURCE TEXT -->
+
+
+                    <div class="form-group">
+
+
+                        <label for="source_text">
+
+                            Additional Information
+
+                            <span class="optional">
+
+                                Optional
+
+                            </span>
+
+
+                        </label>
+
+
+                        <textarea
+
+                            id="source_text"
+
+                            name="source_text"
+
+                            placeholder="You may add curriculum content or additional information here..."
+
+                        ></textarea>
+
+
+                    </div>
+
+
+                    <!-- SUBMIT BUTTON -->
+
+
+                    <button
+
+                        type="submit"
+
+                        id="submitBtn"
+
+                        class="generate-button"
+
+                    >
+
+
+                        <span>
+
+                            Generate Lesson
+
+                        </span>
+
+
+                        <span class="button-arrow">
+
+                            →
+
+                        </span>
+
+
+                    </button>
+
+
+                </form>
+
+
+            </section>
+
+
+            <!-- =================================================
+                 FEATURES
+                 ================================================= -->
+
+
+            <div class="feature-row">
+
+
+                <div class="feature-item">
+
+
+                    <span>
+
+                        📚
+
+                    </span>
+
+
+                    <p>
+
+                        Student-Friendly
+
+                    </p>
+
+
+                </div>
+
+
+                <div class="feature-item">
+
+
+                    <span>
+
+                        🧠
+
+                    </span>
+
+
+                    <p>
+
+                        AI-Powered
+
+                    </p>
+
+
+                </div>
+
+
+                <div class="feature-item">
+
+
+                    <span>
+
+                        🎧
+
+                    </span>
+
+
+                    <p>
+
+                        Audio Lessons
+
+                    </p>
+
+
+                </div>
+
+
+                <div class="feature-item">
+
+
+                    <span>
+
+                        🎬
+
+                    </span>
+
+
+                    <p>
+
+                        Video Lessons
+
+                    </p>
+
+
+                </div>
+
+
+            </div>
+
+
+            <!-- =================================================
+                 FOOTER
+                 ================================================= -->
+
+
+            <footer>
+
+
+                © 2026
+
+
+                <strong>
+
+                    Birhan AI
+
+                </strong>
+
+
+                <span>
+
+                    •
+
+                </span>
+
+
+                ብርሃን AI
+
+
+                <span>
+
+                    •
+
+                </span>
+
+
+                Intelligent Learning for Everyone
+
+
+            </footer>
+
+
+        </div>
+
+
+    </main>
+
+    <!-- PERCENTAGE SCRIPT -->
+    <script>
+        document.getElementById('lessonForm').onsubmit = function() {
+            var overlay = document.getElementById('progressOverlay');
+            var percentText = document.getElementById('percentText');
+            var barFill = document.getElementById('barFill');
+
+            overlay.style.display = 'flex';
+
+            var count = 0;
+            var interval = setInterval(function() {
+                if (count < 95) {
+                    count += 1;
+                    percentText.innerText = count + '%';
+                    barFill.style.width = count + '%';
+                } else {
+                    clearInterval(interval);
+                }
+            }, 100);
+        };
+    </script>
+
+</body>
+
+</html>

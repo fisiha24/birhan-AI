@@ -1,0 +1,8 @@
+Flask==3.0.3
+python-dotenv==1.0.1
+requests==2.32.3
+edge-tts==6.1.12
+moviepy==1.0.3
+Pillow==10.4.0
+numpy==1.26.4
+gunicorn==22.0.0

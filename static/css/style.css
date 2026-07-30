@@ -1,0 +1,906 @@
+/* ============================================================
+   BIRHAN AI
+   Main Stylesheet
+   ============================================================ */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+
+:root {
+    --primary: #173f8a;
+    --primary-dark: #102e66;
+    --secondary: #f4b400;
+    --gold: #f7c948;
+
+    --background: #f5f7fb;
+    --white: #ffffff;
+    --text: #1f2937;
+    --muted: #6b7280;
+
+    --border: #e5e7eb;
+    --shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+
+    --radius: 16px;
+}
+
+
+body {
+    font-family:
+        "Segoe UI",
+        Arial,
+        sans-serif;
+
+    background: var(--background);
+
+    color: var(--text);
+
+    min-height: 100vh;
+}
+
+
+/* ============================================================
+   NAVBAR
+   ============================================================ */
+
+.navbar {
+    width: 100%;
+
+    background: var(--primary);
+
+    color: var(--white);
+
+    padding: 16px 6%;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    box-shadow: var(--shadow);
+}
+
+
+.logo {
+    display: flex;
+
+    align-items: center;
+
+    gap: 12px;
+}
+
+
+.logo h1 {
+    font-size: 24px;
+
+    font-weight: 700;
+
+    letter-spacing: 0.5px;
+}
+
+
+.logo span {
+    color: var(--gold);
+}
+
+
+.nav-links {
+    display: flex;
+
+    align-items: center;
+
+    gap: 24px;
+
+    list-style: none;
+}
+
+
+.nav-links a {
+    color: var(--white);
+
+    text-decoration: none;
+
+    font-size: 15px;
+
+    transition: 0.3s ease;
+}
+
+
+.nav-links a:hover {
+    color: var(--gold);
+}
+
+
+/* ============================================================
+   MAIN CONTAINER
+   ============================================================ */
+
+.container {
+    width: 92%;
+
+    max-width: 1200px;
+
+    margin: 40px auto;
+}
+
+
+/* ============================================================
+   HERO SECTION
+   ============================================================ */
+
+.hero {
+    background:
+        linear-gradient(
+            135deg,
+            var(--primary),
+            var(--primary-dark)
+        );
+
+    color: var(--white);
+
+    border-radius: var(--radius);
+
+    padding: 60px 40px;
+
+    text-align: center;
+
+    box-shadow: var(--shadow);
+
+    margin-bottom: 30px;
+}
+
+
+.hero h1 {
+    font-size: clamp(32px, 5vw, 58px);
+
+    margin-bottom: 18px;
+}
+
+
+.hero h1 span {
+    color: var(--gold);
+}
+
+
+.hero p {
+    max-width: 750px;
+
+    margin: 0 auto;
+
+    font-size: 18px;
+
+    line-height: 1.7;
+
+    color: #e5e7eb;
+}
+
+
+/* ============================================================
+   CARDS
+   ============================================================ */
+
+.card {
+    background: var(--white);
+
+    border-radius: var(--radius);
+
+    padding: 28px;
+
+    margin-bottom: 25px;
+
+    box-shadow: var(--shadow);
+
+    border: 1px solid var(--border);
+}
+
+
+.card h2 {
+    color: var(--primary);
+
+    margin-bottom: 18px;
+
+    font-size: 24px;
+}
+
+
+.card h3 {
+    color: var(--primary);
+
+    margin-bottom: 12px;
+}
+
+
+.card p {
+    line-height: 1.7;
+
+    color: var(--muted);
+}
+
+
+/* ============================================================
+   FORM ELEMENTS
+   ============================================================ */
+
+form {
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 18px;
+}
+
+
+label {
+    font-weight: 600;
+
+    color: var(--text);
+
+    margin-bottom: 6px;
+
+    display: block;
+}
+
+
+input,
+select,
+textarea {
+    width: 100%;
+
+    padding: 13px 15px;
+
+    border: 1px solid var(--border);
+
+    border-radius: 10px;
+
+    font-size: 15px;
+
+    font-family: inherit;
+
+    outline: none;
+
+    background: var(--white);
+
+    transition: 0.3s ease;
+}
+
+
+input:focus,
+select:focus,
+textarea:focus {
+    border-color: var(--primary);
+
+    box-shadow:
+        0 0 0 3px
+        rgba(23, 63, 138, 0.12);
+}
+
+
+textarea {
+    min-height: 140px;
+
+    resize: vertical;
+}
+
+
+/* ============================================================
+   LESSON TOPIC
+   Only the Lesson Topic box is changed
+   ============================================================ */
+
+#topic {
+    min-height: 80px;
+
+    resize: vertical;
+}
+
+
+/* ============================================================
+   BUTTONS
+   ============================================================ */
+
+button,
+.btn {
+    display: inline-flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    gap: 8px;
+
+    border: none;
+
+    border-radius: 10px;
+
+    padding: 13px 22px;
+
+    font-size: 15px;
+
+    font-weight: 600;
+
+    cursor: pointer;
+
+    text-decoration: none;
+
+    transition: 0.3s ease;
+}
+
+
+.btn-primary,
+button[type="submit"] {
+    background: var(--primary);
+
+    color: var(--white);
+}
+
+
+.btn-primary:hover,
+button[type="submit"]:hover {
+    background: var(--primary-dark);
+
+    transform: translateY(-2px);
+}
+
+
+.btn-gold {
+    background: var(--secondary);
+
+    color: #1f2937;
+}
+
+
+.btn-gold:hover {
+    background: var(--gold);
+
+    transform: translateY(-2px);
+}
+
+
+.btn-danger {
+    background: #dc2626;
+
+    color: var(--white);
+}
+
+
+.btn-danger:hover {
+    background: #b91c1c;
+}
+
+
+/* ============================================================
+   GRID
+   ============================================================ */
+
+.grid {
+    display: grid;
+
+    grid-template-columns:
+        repeat(
+            auto-fit,
+            minmax(260px, 1fr)
+        );
+
+    gap: 24px;
+}
+
+
+.two-column {
+    display: grid;
+
+    grid-template-columns:
+        repeat(
+            2,
+            minmax(0, 1fr)
+        );
+
+    gap: 25px;
+}
+
+
+/* ============================================================
+   DASHBOARD
+   ============================================================ */
+
+.dashboard {
+    display: grid;
+
+    grid-template-columns: 250px 1fr;
+
+    min-height: 100vh;
+}
+
+
+.sidebar {
+    background: var(--primary);
+
+    color: var(--white);
+
+    padding: 25px 18px;
+}
+
+
+.sidebar h2 {
+    text-align: center;
+
+    margin-bottom: 30px;
+
+    color: var(--gold);
+}
+
+
+.sidebar a {
+    display: block;
+
+    color: var(--white);
+
+    text-decoration: none;
+
+    padding: 13px 15px;
+
+    margin-bottom: 8px;
+
+    border-radius: 8px;
+
+    transition: 0.3s ease;
+}
+
+
+.sidebar a:hover,
+.sidebar a.active {
+    background: rgba(255, 255, 255, 0.15);
+
+    color: var(--gold);
+}
+
+
+.dashboard-content {
+    padding: 35px;
+
+    background: var(--background);
+}
+
+
+/* ============================================================
+   STAT CARDS
+   ============================================================ */
+
+.stat-card {
+    background: var(--white);
+
+    border-radius: var(--radius);
+
+    padding: 24px;
+
+    box-shadow: var(--shadow);
+
+    border-left: 5px solid var(--primary);
+}
+
+
+.stat-card h3 {
+    font-size: 15px;
+
+    color: var(--muted);
+
+    margin-bottom: 10px;
+}
+
+
+.stat-card strong {
+    display: block;
+
+    font-size: 32px;
+
+    color: var(--primary);
+}
+
+
+/* ============================================================
+   ALERTS
+   ============================================================ */
+
+.alert {
+    padding: 15px 18px;
+
+    border-radius: 10px;
+
+    margin-bottom: 20px;
+
+    font-size: 15px;
+}
+
+
+.alert-success {
+    background: #dcfce7;
+
+    color: #166534;
+
+    border: 1px solid #86efac;
+}
+
+
+.alert-error,
+.alert-danger {
+    background: #fee2e2;
+
+    color: #991b1b;
+
+    border: 1px solid #fca5a5;
+}
+
+
+.alert-warning {
+    background: #fef3c7;
+
+    color: #92400e;
+
+    border: 1px solid #fcd34d;
+}
+
+
+.alert-info {
+    background: #dbeafe;
+
+    color: #1e40af;
+
+    border: 1px solid #93c5fd;
+}
+
+
+/* ============================================================
+   LESSON CONTENT
+   ============================================================ */
+
+.lesson-content {
+    background: var(--white);
+
+    padding: 30px;
+
+    border-radius: var(--radius);
+
+    box-shadow: var(--shadow);
+
+    line-height: 1.8;
+}
+
+
+.lesson-content h1,
+.lesson-content h2,
+.lesson-content h3 {
+    color: var(--primary);
+
+    margin-top: 20px;
+
+    margin-bottom: 12px;
+}
+
+
+.lesson-content ul,
+.lesson-content ol {
+    padding-left: 28px;
+
+    margin: 15px 0;
+}
+
+
+.lesson-content li {
+    margin-bottom: 8px;
+}
+
+
+/* ============================================================
+   VIDEO
+   ============================================================ */
+
+.video-container {
+    width: 100%;
+
+    background: #000;
+
+    border-radius: var(--radius);
+
+    overflow: hidden;
+
+    box-shadow: var(--shadow);
+}
+
+
+.video-container video {
+    width: 100%;
+
+    display: block;
+}
+
+
+/* ============================================================
+   LOADING & PERCENTAGE OVERLAY
+   ============================================================ */
+
+.loading {
+    display: none;
+
+    text-align: center;
+
+    padding: 25px;
+
+    color: var(--primary);
+
+    font-weight: 600;
+}
+
+
+.spinner {
+    width: 40px;
+
+    height: 40px;
+
+    border: 4px solid #e5e7eb;
+
+    border-top: 4px solid var(--primary);
+
+    border-radius: 50%;
+
+    animation: spin 1s linear infinite;
+
+    margin: 0 auto 15px;
+}
+
+
+@keyframes spin {
+
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+
+}
+
+
+.progress-overlay {
+    display: none;
+
+    position: fixed;
+
+    top: 0;
+
+    left: 0;
+
+    width: 100%;
+
+    height: 100%;
+
+    background: rgba(16, 46, 102, 0.92);
+
+    z-index: 9999;
+
+    flex-direction: column;
+
+    justify-content: center;
+
+    align-items: center;
+
+    color: var(--white);
+
+    backdrop-filter: blur(5px);
+}
+
+
+.progress-circle {
+    font-size: 3.5rem;
+
+    font-weight: 800;
+
+    color: var(--gold);
+
+    margin-bottom: 15px;
+
+    letter-spacing: 1px;
+}
+
+
+.progress-bar-container {
+    width: 280px;
+
+    height: 12px;
+
+    background: rgba(255, 255, 255, 0.2);
+
+    border-radius: 10px;
+
+    overflow: hidden;
+
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+
+.progress-bar-fill {
+    width: 0%;
+
+    height: 100%;
+
+    background: var(--gold);
+
+    border-radius: 10px;
+
+    transition: width 0.2s ease;
+}
+
+
+.progress-overlay p {
+    margin-top: 18px;
+
+    font-size: 16px;
+
+    color: #e5e7eb;
+
+    letter-spacing: 0.3px;
+}
+
+
+/* ============================================================
+   TABLE
+   ============================================================ */
+
+.table-container {
+    width: 100%;
+
+    overflow-x: auto;
+}
+
+
+table {
+    width: 100%;
+
+    border-collapse: collapse;
+
+    background: var(--white);
+}
+
+
+th,
+td {
+    padding: 14px 16px;
+
+    text-align: left;
+
+    border-bottom: 1px solid var(--border);
+}
+
+
+th {
+    background: var(--primary);
+
+    color: var(--white);
+
+    font-weight: 600;
+}
+
+
+tr:hover {
+    background: #f8fafc;
+}
+
+
+/* ============================================================
+   FOOTER
+   ============================================================ */
+
+footer {
+    text-align: center;
+
+    padding: 30px 20px;
+
+    margin-top: 40px;
+
+    background: var(--primary);
+
+    color: var(--white);
+}
+
+
+footer span {
+    color: var(--gold);
+}
+
+
+/* ============================================================
+   RESPONSIVE DESIGN
+   ============================================================ */
+
+@media (max-width: 900px) {
+
+    .dashboard {
+        grid-template-columns: 1fr;
+    }
+
+
+    .sidebar {
+        padding: 15px;
+    }
+
+
+    .sidebar h2 {
+        margin-bottom: 15px;
+    }
+
+
+    .sidebar a {
+        display: inline-block;
+
+        margin-right: 5px;
+    }
+
+
+    .dashboard-content {
+        padding: 20px;
+    }
+
+
+    .two-column {
+        grid-template-columns: 1fr;
+    }
+
+}
+
+
+@media (max-width: 600px) {
+
+    .navbar {
+        padding: 14px 5%;
+
+        flex-direction: column;
+
+        gap: 15px;
+    }
+
+
+    .nav-links {
+        gap: 14px;
+
+        flex-wrap: wrap;
+
+        justify-content: center;
+    }
+
+
+    .container {
+        width: 94%;
+
+        margin: 25px auto;
+    }
+
+
+    .hero {
+        padding: 40px 22px;
+    }
+
+
+    .hero p {
+        font-size: 16px;
+    }
+
+
+    .card {
+        padding: 20px;
+    }
+
+
+    .dashboard-content {
+        padding: 15px;
+    }
+
+
+    .btn,
+    button {
+        width: 100%;
+    }
+
+}
