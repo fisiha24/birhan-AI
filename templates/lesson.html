@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>
+
+        {{ lesson.title }} - Birhan AI
+
+    </title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='css/style.css') }}">
+
+</head>
+
+<body>
+
+<main class="lesson-container">
+
+
+    <!-- ===== LESSON HERO ===== -->
+
+    <section class="lesson-hero">
+
+        <div class="brand-badge">
+
+            <span>
+
+                📚
+
+            </span>
+
+            <span>
+
+                Birhan AI
+
+            </span>
+
+            <span class="amharic-badge">
+
+                ብርሃን AI
+
+            </span>
+
+        </div>
+
+
+        <h1>
+
+            {{ lesson.title }}
+
+        </h1>
+
+
+        <p class="hero-subtitle">
+
+            Your intelligent digital teacher
+
+        </p>
+
+
+        <div class="lesson-meta">
+
+
+            <div class="meta-item">
+
+                <span class="meta-icon">
+
+                    📚
+
+                </span>
+
+                <div>
+
+                    <small>
+
+                        Subject
+
+                    </small>
+
+                    <strong>
+
+                        {{ lesson.subject }}
+
+                    </strong>
+
+                </div>
+
+            </div>
+
+
+            <div class="meta-item">
+
+                <span class="meta-icon">
+
+                    🎓
+
+                </span>
+
+                <div>
+
+                    <small>
+
+                        Grade
+
+                    </small>
+
+                    <strong>
+
+                        {{ lesson.grade }}
+
+                    </strong>
+
+                </div>
+
+            </div>
+
+
+            <div class="meta-item">
+
+                <span class="meta-icon">
+
+                    🌐
+
+                </span>
+
+                <div>
+
+                    <small>
+
+                        Language
+
+                    </small>
+
+                    <strong>
+
+                        {{ lesson.language }}
+
+                    </strong>
+
+                </div>
+
+            </div>
+
+
+        </div>
+
+    </section>
+
+
+    <!-- ===== VIDEO & AUDIO ===== -->
+
+    <section class="media-grid">
+
+
+        {% if video_filename %}
+
+        <div class="lesson-card media-card">
+
+            <div class="card-heading">
+
+                <div class="card-icon video-icon">
+
+                    🎬
+
+                </div>
+
+                <div>
+
+                    <h2>
+
+                        Video Lesson
+
+                    </h2>
+
+                    <p>
+
+                        Watch and learn visually
+
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <video
+
+                controls
+
+                preload="metadata"
+
+                class="lesson-video"
+
+            >
+
+                <source
+
+                    src="{{ url_for(
+
+                        'static',
+
+                        filename='videos/' + video_filename
+
+                    ) }}"
+
+                    type="video/mp4"
+
+                >
+
+                Your browser does not support video playback.
+
+            </video>
+
+        </div>
+
+        {% endif %}
+
+
+        {% if audio_filename %}
+
+        <div class="lesson-card media-card">
+
+            <div class="card-heading">
+
+                <div class="card-icon audio-icon">
+
+                    🎧
+
+                </div>
+
+                <div>
+
+                    <h2>
+
+                        Listen to the Lesson
+
+                    </h2>
+
+                    <p>
+
+                        Learn by listening
+
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <audio
+
+                controls
+
+                preload="metadata"
+
+                class="lesson-audio"
+
+            >
+
+                <source
+
+                    src="{{ url_for(
+
+                        'static',
+
+                        filename='audio/' + audio_filename
+
+                    ) }}"
+
+                    type="audio/mpeg"
+
+                >
+
+                Your browser does not support audio playback.
+
+            </audio>
+
+        </div>
+
+        {% endif %}
+
+
+    </section>
+
+
+    <!-- ===== GREETING ===== -->
+
+    {% if lesson.greeting %}
+
+    <section class="lesson-card content-card">
+
+        <div class="section-title">
+
+            <span>
+
+                👋
+
+            </span>
+
+            <h2>
+
+                Welcome
+
+            </h2>
+
+        </div>
+
+
+        <p>
+
+            {{ lesson.greeting }}
+
+        </p>
+
+    </section>
+
+    {% endif %}
+
+
+    <!-- ===== INTRODUCTION ===== -->
+
+    {% if lesson.introduction %}
+
+    <section class="lesson-card content-card">
+
+        <div class="section-title">
+
+            <span>
+
+                💡
+
+            </span>
+
+            <h2>
+
+                Introduction
+
+            </h2>
+
+        </div>
+
+
+        <p>
+
+            {{ lesson.introduction }}
+
+        </p>
+
+    </section>
+
+    {% endif %}
+
+
+    <!-- ===== OBJECTIVES ===== -->
+
+    {% if lesson.objectives %}
+
+    <section class="lesson-card content-card objectives-card">
+
+        <div class="section-title">
+
+            <span>
+
+                🎯
+
+            </span>
+
+            <h2>
+
+                Learning Objectives
+
+            </h2>
+
+        </div>
+
+
+        <ul class="objectives-list">
+
+            {% for objective in lesson.objectives %}
+
+            <li>
+
+                <span class="check-icon">
+
+                    ✓
+
+                </span>
+
+                <span>
+
+                    {{ objective }}
+
+                </span>
+
+            </li>
+
+            {% endfor %}
+
+        </ul>
+
+    </section>
+
+    {% endif %}
+
+
+    <!-- ===== LESSON SECTIONS ===== -->
+
+    {% for section in lesson.sections %}
+
+    <section class="lesson-card content-card lesson-section">
+
+
+        <div class="section-title">
+
+            <span>
+
+                📖
+
+            </span>
+
+            <h2>
+
+                {{ section.title }}
+
+            </h2>
+
+        </div>
+
+
+        {% if section.explanation %}
+
+        <div class="explanation">
+
+            <p>
+
+                {{ section.explanation }}
+
+            </p>
+
+        </div>
+
+        {% endif %}
+
+
+        {% if section.example %}
+
+        <div class="example-box">
+
+            <div class="box-title">
+
+                💡 Example
+
+            </div>
+
+            <p>
+
+                {{ section.example }}
+
+            </p>
+
+        </div>
+
+        {% endif %}
+
+
+        {% if section.key_points %}
+
+        <div class="key-points-box">
+
+            <div class="box-title">
+
+                ⭐ Key Points
+
+            </div>
+
+            <ul>
+
+                {% for point in section.key_points %}
+
+                <li>
+
+                    {{ point }}
+
+                </li>
+
+                {% endfor %}
+
+            </ul>
+
+        </div>
+
+        {% endif %}
+
+
+    </section>
+
+    {% endfor %}
+
+
+    <!-- ===== SUMMARY ===== -->
+
+    {% if lesson.summary %}
+
+    <section class="lesson-card summary-card">
+
+
+        <div class="section-title">
+
+            <span>
+
+                📝
+
+            </span>
+
+            <h2>
+
+                Summary
+
+            </h2>
+
+        </div>
+
+
+        <p>
+
+            {{ lesson.summary }}
+
+        </p>
+
+
+    </section>
+
+    {% endif %}
+
+
+    <!-- ===== QUIZ ===== -->
+
+    {% if lesson.quiz %}
+
+    <section class="lesson-card quiz-card">
+
+
+        <div class="section-title">
+
+            <span>
+
+                🧠
+
+            </span>
+
+            <h2>
+
+                Quick Quiz
+
+            </h2>
+
+        </div>
+
+
+        <p class="quiz-subtitle">
+
+            Test your understanding of this lesson.
+
+        </p>
+
+
+        {% for question in lesson.quiz %}
+
+        <div class="quiz-question">
+
+
+            <h3>
+
+                <span class="question-number">
+
+                    {{ loop.index }}
+
+                </span>
+
+                {{ question.question }}
+
+            </h3>
+
+
+            {% if question.options %}
+
+            <div class="quiz-options">
+
+
+                {% for option in question.options %}
+
+                <div class="quiz-option">
+
+                    <span class="option-letter">
+
+                        {{ "ABCD"[loop.index0] }}
+
+                    </span>
+
+                    <span>
+
+                        {{ option }}
+
+                    </span>
+
+                </div>
+
+                {% endfor %}
+
+
+            </div>
+
+            {% endif %}
+
+
+        </div>
+
+        {% endfor %}
+
+
+    </section>
+
+    {% endif %}
+
+
+    <!-- ===== VISUAL SCENES ===== -->
+
+    {% if scene_images %}
+
+    <section class="lesson-card scenes-card">
+
+
+        <div class="section-title">
+
+            <span>
+
+                🖼️
+
+            </span>
+
+            <h2>
+
+                Visual Scenes
+
+            </h2>
+
+        </div>
+
+
+        <div class="scene-grid">
+
+
+            {% for image in scene_images %}
+
+            <div class="scene-item">
+
+                <img
+
+                    src="{{ url_for(
+
+                        'static',
+
+                        filename='images/generated/' + image
+
+                    ) }}"
+
+                    alt="Birhan AI Lesson Scene {{ loop.index }}"
+
+                    loading="lazy"
+
+                >
+
+            </div>
+
+            {% endfor %}
+
+
+        </div>
+
+
+    </section>
+
+    {% endif %}
+
+
+    <!-- ===== FOOTER ===== -->
+
+    <footer class="lesson-footer">
+
+        <div class="footer-brand">
+
+            📚 Birhan AI
+
+            <span class="amharic-footer">
+
+                ብርሃን AI
+
+            </span>
+
+        </div>
+
+
+        <p>
+
+            Learn clearly. Understand deeply. Grow confidently.
+
+        </p>
+
+
+    </footer>
+
+
+</main>
+
+</body>
+
+</html>
