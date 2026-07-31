@@ -1,4 +1,3 @@
-```python
 """
 Birhan AI
 Main Flask Application
@@ -8,10 +7,7 @@ generates gTTS audio, and produces synchronized
 educational videos.
 
 Deployment:
-- Render.com
-- Gunicorn
-- gTTS only
-- No edge-tts fallback
+    gunicorn --workers 1 --threads 2 --timeout 600 app:app
 """
 
 import json
@@ -81,11 +77,6 @@ from models.database import (
 
 app = Flask(__name__)
 
-
-# ============================================================
-# SECRET KEY
-# ============================================================
-
 app.config["SECRET_KEY"] = SECRET_KEY
 
 
@@ -97,7 +88,7 @@ initialize_database()
 
 
 # ============================================================
-# NARRATION RATE
+# NARRATION SPEAKING RATE
 # ============================================================
 
 NARRATION_RATE = "-25%"
@@ -115,7 +106,7 @@ ASSESSMENT_TIERS = [
 
 
 # ============================================================
-# QUESTION TEXT
+# BUILD QUESTION TEXT
 # ============================================================
 
 def _build_question_text(item):
@@ -126,12 +117,12 @@ def _build_question_text(item):
 
     options = item.get(
         "options",
-        [],
+        []
     )
 
     if not isinstance(
         options,
-        list,
+        list
     ):
         options = []
 
@@ -173,7 +164,7 @@ def _build_question_text(item):
 
 
 # ============================================================
-# QUESTION BOARD TEXT
+# BUILD QUESTION BOARD TEXT
 # ============================================================
 
 def _build_question_board_text(item):
@@ -184,12 +175,12 @@ def _build_question_board_text(item):
 
     options = item.get(
         "options",
-        [],
+        []
     )
 
     if not isinstance(
         options,
-        list,
+        list
     ):
         options = []
 
@@ -205,10 +196,7 @@ def _build_question_board_text(item):
     lines = []
 
     if question:
-
-        lines.append(
-            question
-        )
+        lines.append(question)
 
     for letter, option in zip(
         option_letters,
@@ -229,7 +217,7 @@ def _build_question_board_text(item):
 
 
 # ============================================================
-# BUILD ASSESSMENT TIER
+# BUILD TIER ASSESSMENT SCENES
 # ============================================================
 
 def _build_tier_scenes(
@@ -239,30 +227,14 @@ def _build_tier_scenes(
     starting_scene_number,
 ):
 
-    """
-    Build:
-
-        question
-        thinking pause
-        answer + explanation
-
-    for every question.
-
-    Questions are asked first, then answers
-    are presented afterward.
-    """
-
     if not items:
 
         return [], starting_scene_number
 
     question_scenes = []
-
     answer_scenes = []
 
-    scene_number = (
-        starting_scene_number
-    )
+    scene_number = starting_scene_number
 
     tier_title = (
         tier_name.capitalize()
@@ -270,6 +242,12 @@ def _build_tier_scenes(
     )
 
     for index, item in enumerate(items):
+
+        if not isinstance(
+            item,
+            dict
+        ):
+            continue
 
         question = str(
             item.get(
@@ -296,103 +274,74 @@ def _build_tier_scenes(
 
             continue
 
-        # ====================================================
-        # QUESTION
-        # ====================================================
+        # ----------------------------------------------------
+        # ASK QUESTION
+        # ----------------------------------------------------
 
-        spoken_question = (
-            _build_question_text(
-                item
-            )
+        spoken_question = _build_question_text(
+            item
         )
 
-        board_question = (
-            _build_question_board_text(
-                item
-            )
+        board_question = _build_question_board_text(
+            item
         )
 
         if index == 0:
 
             intro = (
-                f"Now let's try "
-                f"{tier_label}s. "
+                f"Now let's try {tier_label}s. "
             )
 
         else:
 
-            intro = (
-                "Next question. "
-            )
+            intro = "Next question. "
 
         question_scenes.append(
             {
                 "scene_number": scene_number,
-
-                "type":
-                    f"assessment_{tier_name}",
-
-                "title":
-                    tier_title[:60],
-
-                "narration":
-                    intro + spoken_question,
-
-                "text":
-                    intro + spoken_question,
-
-                "board_text":
-                    board_question,
-
-                "visual_type":
-                    "educational",
+                "type": f"assessment_{tier_name}",
+                "title": tier_title[:60],
+                "narration": (
+                    intro
+                    + spoken_question
+                ),
+                "text": (
+                    intro
+                    + spoken_question
+                ),
+                "board_text": board_question,
+                "visual_type": "educational",
             }
         )
 
         scene_number += 1
 
-        # ====================================================
-        # THINKING
-        # ====================================================
+        # ----------------------------------------------------
+        # THINKING PERIOD
+        # ----------------------------------------------------
 
         question_scenes.append(
             {
-                "scene_number":
-                    scene_number,
-
-                "type":
-                    f"assessment_{tier_name}",
-
-                "title":
-                    "Think About Your Answer",
-
-                "narration":
-                    (
-                        "Take a moment to "
-                        "think about your answer."
-                        f" [PAUSE:"
-                        f"{THINKING_PAUSE_SECONDS}]"
-                    ),
-
-                "text":
-                    "Think about your answer...",
-
-                "board_text":
-                    "Think about your answer...",
-
-                "visual_type":
-                    "educational",
-
-                "pause_duration":
-                    THINKING_PAUSE_SECONDS,
+                "scene_number": scene_number,
+                "type": f"assessment_{tier_name}",
+                "title": "Think About Your Answer",
+                "narration": (
+                    "Take a moment to think "
+                    "about your answer."
+                    f" [PAUSE:{THINKING_PAUSE_SECONDS}]"
+                ),
+                "text": "Think about your answer...",
+                "board_text": "Think about your answer...",
+                "visual_type": "educational",
+                "pause_duration": THINKING_PAUSE_SECONDS,
             }
         )
 
         scene_number += 1
 
-        # ====================================================
+        # ----------------------------------------------------
         # ANSWER
-        # ====================================================
+        # ----------------------------------------------------
 
         answer_text = (
             "For question "
@@ -404,43 +353,27 @@ def _build_tier_scenes(
         ).strip()
 
         applause_line = (
-            "If your answer for this "
-            "question was "
+            "If your answer for this question was "
             + answer
             + ", excellent job! "
-            "Give yourselves a round "
-            "of applause!"
-            f" [PAUSE:"
-            f"{APPLAUSE_PAUSE_SECONDS}]"
+            + "Give yourselves a round of applause!"
+            + f" [PAUSE:{APPLAUSE_PAUSE_SECONDS}]"
         )
 
         answer_scenes.append(
             {
-                "scene_number":
-                    scene_number,
-
-                "type":
-                    f"assessment_{tier_name}",
-
-                "title":
-                    "Correct Answer",
-
-                "narration":
+                "scene_number": scene_number,
+                "type": f"assessment_{tier_name}",
+                "title": "Correct Answer",
+                "narration": (
                     answer_text
                     + " "
-                    + applause_line,
-
-                "text":
-                    answer_text,
-
-                "board_text":
-                    answer_text,
-
-                "visual_type":
-                    "educational",
-
-                "pause_duration":
-                    APPLAUSE_PAUSE_SECONDS,
+                    + applause_line
+                ),
+                "text": answer_text,
+                "board_text": answer_text,
+                "visual_type": "educational",
+                "pause_duration": APPLAUSE_PAUSE_SECONDS,
             }
         )
 
@@ -468,86 +401,59 @@ def create_assessment_scenes(
 
     if not isinstance(
         assessment,
-        dict,
+        dict
     ):
 
         return [], starting_scene_number
 
     scenes = []
 
-    scene_number = (
-        starting_scene_number
-    )
+    scene_number = starting_scene_number
 
-    for (
-        tier_name,
-        tier_label,
-    ) in ASSESSMENT_TIERS:
+    for tier_name, tier_label in ASSESSMENT_TIERS:
 
         tier_items = assessment.get(
             tier_name,
-            [],
+            []
         )
 
         if not isinstance(
             tier_items,
-            list,
+            list
         ):
-
             continue
 
-        tier_scenes, scene_number = (
-            _build_tier_scenes(
-                tier_name,
-                tier_label,
-                tier_items,
-                scene_number,
-            )
+        tier_scenes, scene_number = _build_tier_scenes(
+            tier_name,
+            tier_label,
+            tier_items,
+            scene_number,
         )
 
         scenes.extend(
             tier_scenes
         )
 
-    return (
-        scenes,
-        scene_number,
-    )
+    return scenes, scene_number
 
 
 # ============================================================
-# CLOSING SCENE
+# CREATE FINAL CLOSING SCENE
 # ============================================================
 
 def create_closing_scene(
-    starting_scene_number,
+    starting_scene_number
 ):
 
     scene = {
-
-        "scene_number":
-            starting_scene_number,
-
-        "type":
-            "closing",
-
-        "title":
-            "Closing",
-
-        "narration":
-            REQUIRED_CLOSING_PHRASE,
-
-        "text":
-            REQUIRED_CLOSING_PHRASE,
-
-        "board_text":
-            REQUIRED_CLOSING_PHRASE,
-
-        "visual_type":
-            "classroom",
-
-        "pause_duration":
-            CLOSING_PAUSE_SECONDS,
+        "scene_number": starting_scene_number,
+        "type": "closing",
+        "title": "Closing",
+        "narration": REQUIRED_CLOSING_PHRASE,
+        "text": REQUIRED_CLOSING_PHRASE,
+        "board_text": REQUIRED_CLOSING_PHRASE,
+        "visual_type": "classroom",
+        "pause_duration": CLOSING_PAUSE_SECONDS,
     }
 
     return [
@@ -578,7 +484,7 @@ def index():
 def generate_lesson_route():
 
     # ========================================================
-    # FORM DATA
+    # GET FORM DATA
     # ========================================================
 
     topic = request.form.get(
@@ -648,12 +554,11 @@ def generate_lesson_route():
 
         if not isinstance(
             lesson,
-            dict,
+            dict
         ):
 
             raise ValueError(
-                "The AI did not return "
-                "a valid lesson."
+                "The AI did not return a valid lesson."
             )
 
         # ====================================================
@@ -667,8 +572,7 @@ def generate_lesson_route():
         if not scenes:
 
             raise ValueError(
-                "No scenes were created "
-                "from the lesson."
+                "No scenes were created from the lesson."
             )
 
         # ====================================================
@@ -677,15 +581,12 @@ def generate_lesson_route():
 
         highest_scene_number = 0
 
-        for index, scene in enumerate(
-            scenes
-        ):
+        for index, scene in enumerate(scenes):
 
             if not isinstance(
                 scene,
-                dict,
+                dict
             ):
-
                 continue
 
             scene_number = scene.get(
@@ -704,13 +605,11 @@ def generate_lesson_route():
                 ValueError,
             ):
 
-                scene_number = (
-                    index + 1
-                )
+                scene_number = index + 1
 
-            scene[
-                "scene_number"
-            ] = scene_number
+            scene["scene_number"] = (
+                scene_number
+            )
 
             highest_scene_number = max(
                 highest_scene_number,
@@ -722,7 +621,7 @@ def generate_lesson_route():
         )
 
         # ====================================================
-        # 4. ASSESSMENT
+        # 4. ADD ASSESSMENT
         # ====================================================
 
         assessment_scenes, next_scene_number = (
@@ -739,7 +638,7 @@ def generate_lesson_route():
             )
 
         # ====================================================
-        # 5. CLOSING
+        # 5. ADD CLOSING
         # ====================================================
 
         closing_scenes, next_scene_number = (
@@ -754,8 +653,6 @@ def generate_lesson_route():
 
         # ====================================================
         # 6. ASSIGN VISUAL STYLE
-        #
-        # Must happen BEFORE images/audio/video.
         # ====================================================
 
         assign_visual_style(
@@ -763,36 +660,33 @@ def generate_lesson_route():
         )
 
         # ====================================================
-        # 7. UNIQUE LESSON ID
+        # 7. CREATE LESSON ID
         # ====================================================
 
         lesson_uuid = uuid.uuid4().hex
 
         scene_images = []
-
         scene_audios = []
-
         valid_scenes = []
 
         # ====================================================
         # AUDIO CACHE
+        #
+        # gTTS only.
         # ====================================================
 
         audio_cache = {}
 
         # ====================================================
-        # 8. CREATE SCENES
+        # 8. CREATE IMAGES AND AUDIO
         # ====================================================
 
-        for index, scene in enumerate(
-            scenes
-        ):
+        for index, scene in enumerate(scenes):
 
             if not isinstance(
                 scene,
-                dict,
+                dict
             ):
-
                 continue
 
             scene_number = scene.get(
@@ -800,14 +694,12 @@ def generate_lesson_route():
                 index + 1,
             )
 
-            # =================================================
-            # VISUAL TYPE
-            # =================================================
+            # ------------------------------------------------
+            # DETECT VISUAL TYPE
+            # ------------------------------------------------
 
-            visual_type = (
-                detect_visual_type(
-                    scene
-                )
+            visual_type = detect_visual_type(
+                scene
             )
 
             if not visual_type:
@@ -817,13 +709,13 @@ def generate_lesson_route():
                     "educational",
                 )
 
-            scene[
-                "visual_type"
-            ] = visual_type
+            scene["visual_type"] = (
+                visual_type
+            )
 
-            # =================================================
-            # IMAGE
-            # =================================================
+            # ------------------------------------------------
+            # CREATE SCENE IMAGE
+            # ------------------------------------------------
 
             image_filename = (
                 f"scene_{scene_number}_"
@@ -831,9 +723,7 @@ def generate_lesson_route():
             )
 
             image_path = (
-                Path(
-                    GENERATED_IMAGE_DIR
-                )
+                Path(GENERATED_IMAGE_DIR)
                 / image_filename
             )
 
@@ -846,9 +736,9 @@ def generate_lesson_route():
                 image_path
             )
 
-            # =================================================
-            # NARRATION
-            # =================================================
+            # ------------------------------------------------
+            # GET NARRATION
+            # ------------------------------------------------
 
             scene_text = scene.get(
                 "narration",
@@ -872,13 +762,9 @@ def generate_lesson_route():
                 scene_text
             ).strip()
 
-            # =================================================
-            # AUDIO
-            #
-            # gTTS ONLY
-            # No edge-tts.
-            # No fallback.
-            # =================================================
+            # ------------------------------------------------
+            # AUDIO FILE
+            # ------------------------------------------------
 
             audio_filename = (
                 f"scene_{scene_number}_"
@@ -886,9 +772,7 @@ def generate_lesson_route():
             )
 
             audio_path = (
-                Path(
-                    AUDIO_DIR
-                )
+                Path(AUDIO_DIR)
                 / audio_filename
             )
 
@@ -900,6 +784,10 @@ def generate_lesson_route():
                 or 0
             )
 
+            # ------------------------------------------------
+            # CACHE KEY
+            # ------------------------------------------------
+
             cache_key = (
                 scene_text.strip().lower(),
                 language,
@@ -907,18 +795,15 @@ def generate_lesson_route():
                 pause_seconds,
             )
 
-            cached_entry = (
-                audio_cache.get(
-                    cache_key
-                )
+            cached_entry = audio_cache.get(
+                cache_key
             )
 
             if cached_entry is not None:
 
-                (
-                    cached_audio_path,
-                    cached_word_boundaries,
-                ) = cached_entry
+                cached_audio_path, cached_word_boundaries = (
+                    cached_entry
+                )
 
                 shutil.copyfile(
                     cached_audio_path,
@@ -931,6 +816,10 @@ def generate_lesson_route():
 
             else:
 
+                # ============================================
+                # gTTS ONLY
+                # ============================================
+
                 audio_result = generate_audio(
                     text=scene_text,
                     output_path=audio_path,
@@ -941,7 +830,7 @@ def generate_lesson_route():
 
                 if isinstance(
                     audio_result,
-                    dict,
+                    dict
                 ):
 
                     word_boundaries = (
@@ -955,19 +844,17 @@ def generate_lesson_route():
 
                     word_boundaries = []
 
-                audio_cache[
-                    cache_key
-                ] = (
+                audio_cache[cache_key] = (
                     audio_path,
                     word_boundaries,
                 )
 
-            # =================================================
-            # WORD TIMING
+            # ------------------------------------------------
+            # SAVE TIMING DATA
             #
-            # gTTS does not provide word timing,
-            # therefore this remains [].
-            # =================================================
+            # gTTS does not provide word-level timing.
+            # Therefore this remains an empty list.
+            # ------------------------------------------------
 
             scene[
                 "speech_word_boundaries"
@@ -982,7 +869,7 @@ def generate_lesson_route():
             )
 
         # ====================================================
-        # VALIDATE IMAGES
+        # 9. VALIDATE GENERATED FILES
         # ====================================================
 
         if not scene_images:
@@ -991,33 +878,23 @@ def generate_lesson_route():
                 "No scene images were generated."
             )
 
-        # ====================================================
-        # VALIDATE AUDIO
-        # ====================================================
-
         if not scene_audios:
 
             raise ValueError(
                 "No scene audio files were generated."
             )
 
-        # ====================================================
-        # MATCH IMAGE / AUDIO COUNTS
-        # ====================================================
-
-        if len(scene_images) != len(
-            scene_audios
-        ):
+        if len(scene_images) != len(scene_audios):
 
             raise ValueError(
-                "The number of scene images "
-                "and audio files do not match."
+                "The number of scene images and "
+                "audio files do not match."
             )
 
         scenes = valid_scenes
 
         # ====================================================
-        # 9. CREATE VIDEO
+        # 10. CREATE COMPLETE VIDEO
         # ====================================================
 
         video_filename = (
@@ -1025,9 +902,7 @@ def generate_lesson_route():
         )
 
         video_path = (
-            Path(
-                VIDEO_DIR
-            )
+            Path(VIDEO_DIR)
             / video_filename
         )
 
@@ -1039,19 +914,17 @@ def generate_lesson_route():
         )
 
         # ====================================================
-        # 10. MAIN AUDIO
+        # 11. MAIN AUDIO
         # ====================================================
 
         main_audio_filename = (
-            Path(
-                scene_audios[0]
-            ).name
+            Path(scene_audios[0]).name
             if scene_audios
             else ""
         )
 
         # ====================================================
-        # 11. SAVE LESSON
+        # 12. SAVE LESSON
         # ====================================================
 
         lesson_id = save_lesson(
@@ -1066,16 +939,12 @@ def generate_lesson_route():
                 lesson,
                 ensure_ascii=False,
             ),
-            audio_filename=(
-                main_audio_filename
-            ),
-            video_filename=(
-                video_filename
-            ),
+            audio_filename=main_audio_filename,
+            video_filename=video_filename,
         )
 
         # ====================================================
-        # 12. IMAGE NAMES
+        # 13. IMAGE FILENAMES
         # ====================================================
 
         scene_image_names = [
@@ -1084,7 +953,7 @@ def generate_lesson_route():
         ]
 
         # ====================================================
-        # 13. AUDIO NAMES
+        # 14. AUDIO FILENAMES
         # ====================================================
 
         scene_audio_names = [
@@ -1093,31 +962,17 @@ def generate_lesson_route():
         ]
 
         # ====================================================
-        # 14. SHOW LESSON
+        # 15. SHOW LESSON
         # ====================================================
 
         return render_template(
             "lesson.html",
-
             lesson=lesson,
-
             lesson_id=lesson_id,
-
-            audio_filename=(
-                main_audio_filename
-            ),
-
-            video_filename=(
-                video_filename
-            ),
-
-            scene_images=(
-                scene_image_names
-            ),
-
-            scene_audios=(
-                scene_audio_names
-            ),
+            audio_filename=main_audio_filename,
+            video_filename=video_filename,
+            scene_images=scene_image_names,
+            scene_audios=scene_audio_names,
         )
 
     except Exception as error:
@@ -1161,4 +1016,3 @@ if __name__ == "__main__":
         port=port,
         debug=debug_mode,
     )
-```
