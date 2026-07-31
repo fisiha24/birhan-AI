@@ -8,9 +8,26 @@
 <body>
   <h2>Your lesson is being generated</h2>
   <p id="status-text">This can take a few minutes. Please don't close this page...</p>
+  <p id="timer-text">Elapsed time: 0:00</p>
 
   <script>
     const jobId = "{{ job_id }}";
+    const startTime = Date.now();
+
+    function formatElapsed(ms) {
+      const totalSeconds = Math.floor(ms / 1000);
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      return minutes + ":" + String(seconds).padStart(2, "0");
+    }
+
+    function updateTimer() {
+      const elapsed = Date.now() - startTime;
+      document.getElementById("timer-text").innerText =
+        "Elapsed time: " + formatElapsed(elapsed);
+    }
+
+    setInterval(updateTimer, 1000);
 
     async function checkStatus() {
       try {
