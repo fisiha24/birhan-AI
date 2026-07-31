@@ -1,15 +1,15 @@
 """
-Birhan AI - Text-to-Speech Service
+Birhan AI
+Text-to-Speech Service
 
-Reliable gTTS-based TTS service for Render deployment.
+Render-safe gTTS implementation.
 
 Features:
 - gTTS only
-- Amharic and English support
-- [PAUSE:x] markers
-- Explicit subprocess timeouts
-- Safe FFmpeg execution
-- Cleanup of temporary files
+- English + Amharic
+- [PAUSE:x] support
+- FFmpeg timeout protection
+- Temporary-file cleanup
 - Compatible with app.py
 """
 
@@ -18,19 +18,13 @@ import base64
 import re
 import subprocess
 import sys
-import tempfile
-
-from gtts import gTTS
 
 
 # ============================================================
-# TIMEOUT SETTINGS
+# SETTINGS
 # ============================================================
 
-# Maximum time allowed for one gTTS network operation.
 GTTS_TIMEOUT = 45
-
-# Maximum time allowed for FFmpeg operations.
 FFMPEG_TIMEOUT = 30
 
 
@@ -48,13 +42,11 @@ def clean_text(text):
 
     text = str(text)
 
-    # Remove excessive whitespace.
-    text = re.sub(r"\s+", " ", text)
-
-    # Remove simple Markdown formatting.
     text = text.replace("**", "")
     text = text.replace("__", "")
     text = text.replace("#", "")
+
+    text = re.sub(r"\s+", " ", text)
 
     return text.strip()
 
@@ -65,12 +57,12 @@ def clean_text(text):
 
 def _extract_pause_markers(text):
     """
-    Extract markers such as:
+    Extract:
 
         [PAUSE:3]
         [PAUSE: 2.5]
 
-    and return:
+    Returns:
 
         cleaned_text, total_pause_seconds
     """
@@ -82,14 +74,17 @@ def _extract_pause_markers(text):
         re.IGNORECASE,
     )
 
-    def _consume(match):
+    def consume(match):
         nonlocal total_pause
 
         total_pause += float(match.group(1))
 
         return " "
 
-    cleaned = pattern.sub(_consume, text)
+    cleaned = pattern.sub(
+        consume,
+        text,
+    )
 
     cleaned = re.sub(
         r"\s+",
@@ -106,22 +101,26 @@ def _extract_pause_markers(text):
 
 def _get_gtts_language(language):
     """
-    Convert the application's language name to a gTTS language code.
+    Convert application language to gTTS language code.
     """
 
-    language_text = str(language or "").strip().lower()
+    value = str(
+        language or ""
+    ).strip().lower()
 
-    if (
-        "amharic" in language_text
-        or language_text in {"am", "amh"}
-    ):
+    if value in {
+        "am",
+        "amh",
+        "amharic",
+    }:
+
         return "am"
 
     return "en"
 
 
 # ============================================================
-# SAFE GTTS GENERATION
+# GTTS CHILD PROCESS
 # ============================================================
 
 def _generate_gtts_with_timeout(
@@ -130,21 +129,16 @@ def _generate_gtts_with_timeout(
     output_path,
 ):
     """
-    Run gTTS in a separate Python process.
+    Run gTTS inside a child process.
 
-    Why?
-
-    gTTS performs a network request internally and does not expose
-    a convenient timeout parameter through gTTS.save().
-
-    Running it in a child process lets us terminate it if the
-    Render network request becomes stuck.
+    This prevents a stuck Google TTS request from
+    blocking the main Flask process forever.
     """
 
-    output_path = Path(output_path)
+    output_path = Path(
+        output_path
+    )
 
-    # Base64 avoids quoting problems when passing large text
-    # through a Python -c command.
     encoded_text = base64.b64encode(
         text.encode("utf-8")
     ).decode("ascii")
@@ -193,13 +187,14 @@ tts.save(output_file)
     except subprocess.TimeoutExpired as error:
 
         raise RuntimeError(
-            f"gTTS timed out after {GTTS_TIMEOUT} seconds."
+            f"gTTS timed out after "
+            f"{GTTS_TIMEOUT} seconds."
         ) from error
 
     except Exception as error:
 
         raise RuntimeError(
-            f"Could not start gTTS process: {error}"
+            f"Could not start gTTS: {error}"
         ) from error
 
     if result.returncode != 0:
@@ -217,7 +212,7 @@ tts.save(output_file)
     if not output_path.exists():
 
         raise RuntimeError(
-            "gTTS finished but did not create the audio file."
+            "gTTS finished but no audio file was created."
         )
 
     if output_path.stat().st_size <= 0:
@@ -230,41 +225,7 @@ tts.save(output_file)
 
 
 # ============================================================
-# FFMPEG SILENCE
-# ============================================================
-
-def _build_silence_command(
-    duration_seconds,
-    output_path,
-):
-    """
-    Build an FFmpeg command that creates MP3 silence.
-    """
-
-    duration_seconds = max(
-        0.1,
-        float(duration_seconds),
-    )
-
-    return [
-        "ffmpeg",
-        "-y",
-        "-f",
-        "lavfi",
-        "-i",
-        "anullsrc=r=24000:cl=mono",
-        "-t",
-        str(duration_seconds),
-        "-codec:a",
-        "libmp3lame",
-        "-b:a",
-        "128k",
-        str(output_path),
-    ]
-
-
-# ============================================================
-# SAFE FFMPEG RUNNER
+# FFMPEG RUNNER
 # ============================================================
 
 def _run_ffmpeg(
@@ -273,7 +234,7 @@ def _run_ffmpeg(
     timeout=FFMPEG_TIMEOUT,
 ):
     """
-    Run FFmpeg with a hard timeout.
+    Run FFmpeg safely with timeout.
     """
 
     try:
@@ -289,14 +250,15 @@ def _run_ffmpeg(
     except subprocess.TimeoutExpired as error:
 
         raise RuntimeError(
-            f"FFmpeg timed out after {timeout} seconds."
+            f"FFmpeg timed out after "
+            f"{timeout} seconds."
         ) from error
 
     except FileNotFoundError as error:
 
         raise RuntimeError(
-            "FFmpeg is not installed or is not available "
-            "on the Render PATH."
+            "FFmpeg is not installed or "
+            "is not available on PATH."
         ) from error
 
     if result.returncode != 0:
@@ -315,7 +277,130 @@ def _run_ffmpeg(
 
 
 # ============================================================
-# AUDIO GENERATION
+# CREATE SILENCE
+# ============================================================
+
+def _create_silence(
+    duration_seconds,
+    output_path,
+):
+    """
+    Create silent MP3 audio.
+    """
+
+    duration_seconds = max(
+        0.1,
+        float(duration_seconds),
+    )
+
+    command = [
+        "ffmpeg",
+        "-y",
+
+        "-f",
+        "lavfi",
+
+        "-i",
+        "anullsrc=r=24000:cl=mono",
+
+        "-t",
+        str(duration_seconds),
+
+        "-codec:a",
+        "libmp3lame",
+
+        "-b:a",
+        "128k",
+
+        str(output_path),
+    ]
+
+    _run_ffmpeg(
+        command,
+        cwd=Path(output_path).parent,
+    )
+
+
+# ============================================================
+# CONCAT AUDIO
+# ============================================================
+
+def _combine_audio(
+    speech_path,
+    silence_path,
+    output_path,
+):
+    """
+    Combine speech and silence.
+    """
+
+    speech_path = Path(
+        speech_path
+    )
+
+    silence_path = Path(
+        silence_path
+    )
+
+    output_path = Path(
+        output_path
+    )
+
+    concat_file = (
+        output_path.parent
+        / f"{output_path.stem}_concat.txt"
+    )
+
+    try:
+
+        concat_file.write_text(
+            (
+                f"file '{speech_path.name}'\n"
+                f"file '{silence_path.name}'\n"
+            ),
+            encoding="utf-8",
+        )
+
+        command = [
+            "ffmpeg",
+            "-y",
+
+            "-f",
+            "concat",
+
+            "-safe",
+            "0",
+
+            "-i",
+            concat_file.name,
+
+            "-codec:a",
+            "libmp3lame",
+
+            "-b:a",
+            "128k",
+
+            output_path.name,
+        ]
+
+        _run_ffmpeg(
+            command,
+            cwd=output_path.parent,
+        )
+
+    finally:
+
+        try:
+
+            if concat_file.exists():
+                concat_file.unlink()
+
+        except OSError:
+            pass
+
+
+# ============================================================
+# MAIN AUDIO FUNCTION
 # ============================================================
 
 def generate_audio(
@@ -326,7 +411,7 @@ def generate_audio(
     pause_seconds=0.0,
 ):
     """
-    Generate one MP3 audio file.
+    Generate MP3 audio.
 
     Returns:
 
@@ -336,22 +421,26 @@ def generate_audio(
             "engine": "gtts"
         }
 
-    `word_boundaries` remains empty because gTTS does not provide
-    word-level speech timing information.
+    gTTS does not provide word-level timestamps,
+    so word_boundaries is intentionally empty.
     """
 
     # --------------------------------------------------------
-    # CLEAN INPUT
+    # CLEAN TEXT
     # --------------------------------------------------------
 
-    text = clean_text(text)
-
-    text, marker_pause = _extract_pause_markers(
+    text = clean_text(
         text
     )
 
+    text, marker_pause = (
+        _extract_pause_markers(
+            text
+        )
+    )
+
     total_pause = (
-        float(pause_seconds or 0.0)
+        float(pause_seconds or 0)
         + marker_pause
     )
 
@@ -374,36 +463,30 @@ def generate_audio(
         exist_ok=True,
     )
 
-    speech_mp3 = (
+    speech_path = (
         output_path.parent
         / f"{output_path.stem}_speech.mp3"
     )
 
-    silence_mp3 = (
+    silence_path = (
         output_path.parent
         / f"{output_path.stem}_pause.mp3"
     )
 
-    concat_file = (
-        output_path.parent
-        / f"{output_path.stem}_concat.txt"
-    )
-
     # --------------------------------------------------------
-    # REMOVE OLD TEMPORARY FILES
+    # REMOVE OLD FILES
     # --------------------------------------------------------
 
-    for file_path in (
-        speech_mp3,
-        silence_mp3,
-        concat_file,
+    for path in (
+        speech_path,
+        silence_path,
         output_path,
     ):
 
         try:
 
-            if file_path.exists():
-                file_path.unlink()
+            if path.exists():
+                path.unlink()
 
         except OSError:
             pass
@@ -414,114 +497,78 @@ def generate_audio(
     try:
 
         # ====================================================
-        # 1. GENERATE SPEECH
+        # SPEECH
         # ====================================================
 
         if text:
 
-            lang = _get_gtts_language(
-                language
+            language_code = (
+                _get_gtts_language(
+                    language
+                )
             )
 
-            try:
+            _generate_gtts_with_timeout(
+                text=text,
+                language_code=language_code,
+                output_path=speech_path,
+            )
 
-                _generate_gtts_with_timeout(
-                    text=text,
-                    language_code=lang,
-                    output_path=speech_mp3,
-                )
-
-                have_speech = (
-                    speech_mp3.exists()
-                    and speech_mp3.stat().st_size > 0
-                )
-
-            except Exception as error:
-
-                raise RuntimeError(
-                    f"gTTS failed: {error}"
-                ) from error
+            have_speech = (
+                speech_path.exists()
+                and speech_path.stat().st_size > 0
+            )
 
         # ====================================================
-        # 2. CREATE PAUSE AUDIO
+        # SILENCE
         # ====================================================
 
         if total_pause > 0:
 
-            command = _build_silence_command(
-                total_pause,
-                silence_mp3,
-            )
-
-            _run_ffmpeg(
-                command,
-                cwd=output_path.parent,
+            _create_silence(
+                duration_seconds=total_pause,
+                output_path=silence_path,
             )
 
             have_silence = (
-                silence_mp3.exists()
-                and silence_mp3.stat().st_size > 0
+                silence_path.exists()
+                and silence_path.stat().st_size > 0
             )
 
         # ====================================================
-        # 3. COMBINE SPEECH + PAUSE
+        # SPEECH + SILENCE
         # ====================================================
 
         if have_speech and have_silence:
 
-            # Use only the file names because FFmpeg runs
-            # inside output_path.parent.
-            concat_file.write_text(
-                (
-                    f"file '{speech_mp3.name}'\n"
-                    f"file '{silence_mp3.name}'\n"
-                ),
-                encoding="utf-8",
-            )
-
-            command = [
-                "ffmpeg",
-                "-y",
-                "-f",
-                "concat",
-                "-safe",
-                "0",
-                "-i",
-                concat_file.name,
-                "-codec:a",
-                "libmp3lame",
-                "-b:a",
-                "128k",
-                output_path.name,
-            ]
-
-            _run_ffmpeg(
-                command,
-                cwd=output_path.parent,
+            _combine_audio(
+                speech_path=speech_path,
+                silence_path=silence_path,
+                output_path=output_path,
             )
 
         # ====================================================
-        # 4. SPEECH ONLY
+        # SPEECH ONLY
         # ====================================================
 
         elif have_speech:
 
-            speech_mp3.replace(
+            speech_path.replace(
                 output_path
             )
 
         # ====================================================
-        # 5. SILENCE ONLY
+        # SILENCE ONLY
         # ====================================================
 
         elif have_silence:
 
-            silence_mp3.replace(
+            silence_path.replace(
                 output_path
             )
 
         # ====================================================
-        # 6. NOTHING CREATED
+        # NOTHING
         # ====================================================
 
         else:
@@ -533,25 +580,24 @@ def generate_audio(
     finally:
 
         # ----------------------------------------------------
-        # ALWAYS CLEAN TEMP FILES
+        # CLEAN TEMP FILES
         # ----------------------------------------------------
 
-        for file_path in (
-            speech_mp3,
-            silence_mp3,
-            concat_file,
+        for path in (
+            speech_path,
+            silence_path,
         ):
 
             try:
 
-                if file_path.exists():
-                    file_path.unlink()
+                if path.exists():
+                    path.unlink()
 
             except OSError:
                 pass
 
     # ========================================================
-    # FINAL VALIDATION
+    # FINAL CHECK
     # ========================================================
 
     if not output_path.exists():
@@ -563,7 +609,7 @@ def generate_audio(
     if output_path.stat().st_size <= 0:
 
         raise RuntimeError(
-            "MP3 audio file was created but is empty."
+            "MP3 audio file is empty."
         )
 
     return {
