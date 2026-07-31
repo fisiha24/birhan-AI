@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Generating your lesson...</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <h2>Your lesson is being generated</h2>
+  <p id="status-text">This can take a few minutes. Please don't close this page...</p>
+
+  <script>
+    const jobId = "{{ job_id }}";
+
+    async function checkStatus() {
+      try {
+        const res = await fetch(`/lesson-status/${jobId}`);
+        const data = await res.json();
+
+        if (data.status === "done") {
+          window.location.href = `/lesson-result/${jobId}`;
+        } else if (data.status === "error") {
+          document.getElementById("status-text").innerText =
+            "Something went wrong: " + data.error;
+        } else if (data.status === "not_found") {
+          document.getElementById("status-text").innerText =
+            "Job not found. Please try again.";
+        } else {
+          setTimeout(checkStatus, 3000);
+        }
+      } catch (err) {
+        setTimeout(checkStatus, 3000);
+      }
+    }
+
+    checkStatus();
+  </script>
+</body>
+</html>
