@@ -13,6 +13,7 @@ Deployment:
 import json
 import os
 import shutil
+import threading
 import uuid
 
 from pathlib import Path
@@ -24,6 +25,7 @@ from flask import (
     redirect,
     url_for,
     flash,
+    jsonify,
 )
 
 from config import (
@@ -103,6 +105,20 @@ ASSESSMENT_TIERS = [
     ("moderate", "a moderate question"),
     ("difficult", "a challenging question"),
 ]
+
+
+# ============================================================
+# IN-MEMORY JOB STATUS STORE
+#
+# Simple in-process dict. Works because gunicorn is run with
+# --workers 1 (a single process), so all requests share the
+# same memory space. If you ever move to more than one worker,
+# this must be replaced with something shared across processes
+# (e.g. a database table or Redis) since each worker would
+# otherwise have its own separate copy of this dict.
+# ============================================================
+
+LESSON_JOBS = {}
 
 
 # ============================================================
@@ -474,67 +490,24 @@ def index():
 
 
 # ============================================================
-# GENERATE LESSON
+# RUN LESSON GENERATION (BACKGROUND WORK)
+#
+# This contains all the heavy work that used to run directly
+# inside the /generate-lesson request. It now runs inside a
+# background thread so the HTTP request can return immediately
+# and avoid Render's platform-level proxy timeout.
 # ============================================================
 
-@app.route(
-    "/generate-lesson",
-    methods=["POST"],
-)
-def generate_lesson_route():
-
-    # ========================================================
-    # GET FORM DATA
-    # ========================================================
-
-    topic = request.form.get(
-        "topic",
-        "",
-    ).strip()
-
-    grade = request.form.get(
-        "grade",
-        "Grade 7",
-    ).strip()
-
-    subject = request.form.get(
-        "subject",
-        "General Science",
-    ).strip()
-
-    chapter = request.form.get(
-        "chapter",
-        "",
-    ).strip()
-
-    previous_topic = request.form.get(
-        "previous_topic",
-        "",
-    ).strip()
-
-    language = request.form.get(
-        "language",
-        "English",
-    ).strip()
-
-    source_text = request.form.get(
-        "source_text",
-        "",
-    ).strip()
-
-    # ========================================================
-    # VALIDATE TOPIC
-    # ========================================================
-
-    if not topic:
-
-        flash(
-            "Please enter a lesson topic."
-        )
-
-        return redirect(
-            url_for("index")
-        )
+def _run_lesson_generation(
+    job_id,
+    topic,
+    grade,
+    subject,
+    chapter,
+    previous_topic,
+    language,
+    source_text,
+):
 
     try:
 
@@ -962,18 +935,20 @@ def generate_lesson_route():
         ]
 
         # ====================================================
-        # 15. SHOW LESSON
+        # 15. STORE RESULT AS DONE
         # ====================================================
 
-        return render_template(
-            "lesson.html",
-            lesson=lesson,
-            lesson_id=lesson_id,
-            audio_filename=main_audio_filename,
-            video_filename=video_filename,
-            scene_images=scene_image_names,
-            scene_audios=scene_audio_names,
-        )
+        LESSON_JOBS[job_id] = {
+            "status": "done",
+            "result": {
+                "lesson": lesson,
+                "lesson_id": lesson_id,
+                "audio_filename": main_audio_filename,
+                "video_filename": video_filename,
+                "scene_images": scene_image_names,
+                "scene_audios": scene_audio_names,
+            },
+        }
 
     except Exception as error:
 
@@ -981,13 +956,166 @@ def generate_lesson_route():
             "Lesson generation failed"
         )
 
+        LESSON_JOBS[job_id] = {
+            "status": "error",
+            "error": str(error),
+        }
+
+
+# ============================================================
+# GENERATE LESSON
+#
+# Kicks off lesson generation in a background thread and
+# returns immediately with a processing page, instead of
+# blocking the request for several minutes (which caused
+# Render's proxy to return a 502 before gunicorn finished).
+# ============================================================
+
+@app.route(
+    "/generate-lesson",
+    methods=["POST"],
+)
+def generate_lesson_route():
+
+    # ========================================================
+    # GET FORM DATA
+    # ========================================================
+
+    topic = request.form.get(
+        "topic",
+        "",
+    ).strip()
+
+    grade = request.form.get(
+        "grade",
+        "Grade 7",
+    ).strip()
+
+    subject = request.form.get(
+        "subject",
+        "General Science",
+    ).strip()
+
+    chapter = request.form.get(
+        "chapter",
+        "",
+    ).strip()
+
+    previous_topic = request.form.get(
+        "previous_topic",
+        "",
+    ).strip()
+
+    language = request.form.get(
+        "language",
+        "English",
+    ).strip()
+
+    source_text = request.form.get(
+        "source_text",
+        "",
+    ).strip()
+
+    # ========================================================
+    # VALIDATE TOPIC
+    # ========================================================
+
+    if not topic:
+
         flash(
-            f"Error: {error}"
+            "Please enter a lesson topic."
         )
 
         return redirect(
             url_for("index")
         )
+
+    # ========================================================
+    # CREATE JOB AND START BACKGROUND THREAD
+    # ========================================================
+
+    job_id = uuid.uuid4().hex
+
+    LESSON_JOBS[job_id] = {
+        "status": "processing",
+    }
+
+    background_thread = threading.Thread(
+        target=_run_lesson_generation,
+        args=(
+            job_id,
+            topic,
+            grade,
+            subject,
+            chapter,
+            previous_topic,
+            language,
+            source_text,
+        ),
+        daemon=True,
+    )
+
+    background_thread.start()
+
+    return render_template(
+        "processing.html",
+        job_id=job_id,
+    )
+
+
+# ============================================================
+# LESSON STATUS (POLLED BY THE PROCESSING PAGE)
+# ============================================================
+
+@app.route("/lesson-status/<job_id>")
+def lesson_status(job_id):
+
+    job = LESSON_JOBS.get(job_id)
+
+    if not job:
+
+        return jsonify(
+            {"status": "not_found"}
+        ), 404
+
+    return jsonify(
+        {
+            "status": job.get("status"),
+            "error": job.get("error"),
+        }
+    )
+
+
+# ============================================================
+# LESSON RESULT (SHOWN ONCE PROCESSING IS DONE)
+# ============================================================
+
+@app.route("/lesson-result/<job_id>")
+def lesson_result(job_id):
+
+    job = LESSON_JOBS.get(job_id)
+
+    if not job or job.get("status") != "done":
+
+        flash(
+            "Lesson not ready yet."
+        )
+
+        return redirect(
+            url_for("index")
+        )
+
+    result = job["result"]
+
+    return render_template(
+        "lesson.html",
+        lesson=result["lesson"],
+        lesson_id=result["lesson_id"],
+        audio_filename=result["audio_filename"],
+        video_filename=result["video_filename"],
+        scene_images=result["scene_images"],
+        scene_audios=result["scene_audios"],
+    )
 
 
 # ============================================================
